@@ -1,0 +1,22 @@
+{
+  "name": "@videomaker/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@videomaker/core": "workspace:*",
+    "@videomaker/credentials": "workspace:*",
+    "@videomaker/schemas": "workspace:*",
+    "@videomaker/providers": "workspace:*",
+    "@videomaker/motion-core": "workspace:*",
+    "@videomaker/motion-remotion": "workspace:*"
+  }
+}
