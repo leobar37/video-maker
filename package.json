@@ -1,0 +1,20 @@
+{
+  "name": "video-maker",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.build.json",
+    "test": "bun test",
+    "credentials:probe": "bun packages/credentials/scripts/probe.ts",
+    "providers:smoke": "bun packages/providers/scripts/smoke.ts",
+    "motion:still": "bun packages/motion-remotion/scripts/motion-still.ts",
+    "vm": "bun packages/cli/src/main.ts",
+    "demo:dry": "bun packages/cli/scripts/demo-dry.ts",
+    "demo:e2e": "bun packages/cli/scripts/demo-e2e.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,16 @@
+# Deps / build outputs
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Secrets / env
+.env
+.env.*
+*.pem
+id_rsa*
+
+# Logs / OS / temp
+*.log
+.DS_Store
+coverage/
+.tmp-*
