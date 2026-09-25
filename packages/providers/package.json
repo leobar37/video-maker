@@ -1,0 +1,19 @@
+{
+  "name": "@videomaker/providers",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@videomaker/core": "workspace:*",
+    "@videomaker/credentials": "workspace:*"
+  }
+}
