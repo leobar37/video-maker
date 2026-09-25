@@ -36,4 +36,11 @@ La resolución es lazy (solo en operaciones que gastan), cacheada por proceso y
 los secretos nunca se imprimen, persisten ni viajan en metadata/journals/bundles.
 
 Credenciales cubiertas: `FAL_KEY`, `ZERNIO_API_KEY`, `ELEVENLABS_API_KEY` y `R2Env`
-(`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, buckets/URL pública).
+(`R2_ENDPOINT` del que se deriva el accountId, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`
+y el par bucket/URL pública: `R2_BUNDLES_BUCKET_NAME`, `R2_MARKETING_BUCKET_NAME` +
+`R2_MARKETING_PUBLIC_URL`, o el par genérico `R2_BUCKET_NAME` + `R2_PUBLIC_URL`).
+
+Buckets de este producto (config local en `.env`, gitignored; el fallback Doppler
+`elena-tech/prd` queda intacto): `video-maker-media-prd` (público, objetos
+content-addressed servidos en `https://video.theelena.me/<key>`) y
+`video-maker-archive-prd` (privado, copia fría).
