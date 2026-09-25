@@ -1,0 +1,45 @@
+{
+  "id": "hello",
+  "product": "demo",
+  "title": "Hola, pipeline de video",
+  "workflow": {
+    "schemaVersion": 1,
+    "draft": true,
+    "reviewPolicy": "advisory"
+  },
+  "resolution": { "width": 1080, "height": 1920 },
+  "fps": 30,
+  "tts": {
+    "provider": "elevenlabs",
+    "mode": "continuous",
+    "voiceId": "21m00Tcm4TlvDq8ikWAM",
+    "voiceName": "Rachel",
+    "modelId": "eleven_multilingual_v2",
+    "language": "es-419"
+  },
+  "branding": { "preset": "generic-elena" },
+  "scenes": [
+    {
+      "id": "intro",
+      "intent": "title-motion",
+      "source": "motion",
+      "narration": "Un video se arma con escenas encadenadas, sin huecos entre cortes. La narración continua suena una sola vez.",
+      "caption": "Todo video es una cadena de escenas.",
+      "status": "active",
+      "durationHint": 3,
+      "minSeconds": 2,
+      "maxSeconds": 30
+    },
+    {
+      "id": "asset-shot",
+      "intent": "media-frame",
+      "source": "demo-app",
+      "narration": "Cada recurso se resuelve por id desde el manifiesto de assets, con su hash y sus medidas.",
+      "caption": "Los recursos viven en el proyecto.",
+      "status": "active",
+      "durationHint": 3,
+      "minSeconds": 2,
+      "maxSeconds": 30
+    }
+  ]
+}

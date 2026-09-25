@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "objects": [
+    {
+      "path": "assets/music/bed.wav",
+      "key": "objects/c0/c073659d78d155d72cec8bd49930ce35ac865b24c0a599125ce9f2cf0479ee56",
+      "sha256": "c073659d78d155d72cec8bd49930ce35ac865b24c0a599125ce9f2cf0479ee56",
+      "bytes": 1058444
+    },
+    {
+      "path": "public/media/asset-shot.mp4",
+      "key": "objects/1f/1f44d700380a7f3842c036fae1b3417b2181dd93b1ff4a0b706e62142fef9215",
+      "sha256": "1f44d700380a7f3842c036fae1b3417b2181dd93b1ff4a0b706e62142fef9215",
+      "bytes": 52863
+    },
+    {
+      "path": "public/media/narration.wav",
+      "key": "objects/23/23ec60807930b70080efb3fa507742c898d11103d2711e4fc972727d9a0a3a4d",
+      "sha256": "23ec60807930b70080efb3fa507742c898d11103d2711e4fc972727d9a0a3a4d",
+      "bytes": 1376334
+    },
+    {
+      "path": "public/media/placeholder-art.png",
+      "key": "objects/e4/e4987d10045742775b745f54ca702feb57b7cb30a3cbb54dee0e94c86e9878a5",
+      "sha256": "e4987d10045742775b745f54ca702feb57b7cb30a3cbb54dee0e94c86e9878a5",
+      "bytes": 2335
+    },
+    {
+      "path": "qa/stills/sample.png",
+      "key": "objects/47/47e1aa7046213137f65dc8b3cf9abc946f97e1ea3cb95afba6b9ead562b29b8a",
+      "sha256": "47e1aa7046213137f65dc8b3cf9abc946f97e1ea3cb95afba6b9ead562b29b8a",
+      "bytes": 1207435
+    },
+    {
+      "path": "renders/hello.mp4",
+      "key": "objects/3e/3efc7565dd09d3f1bc82c8f1baef34b3426c9c61cc64ef72493e5e0c3ed3ce39",
+      "sha256": "3efc7565dd09d3f1bc82c8f1baef34b3426c9c61cc64ef72493e5e0c3ed3ce39",
+      "bytes": 1222777
+    },
+    {
+      "path": "scenes/asset-shot/capture.mp4",
+      "key": "objects/1f/1f44d700380a7f3842c036fae1b3417b2181dd93b1ff4a0b706e62142fef9215",
+      "sha256": "1f44d700380a7f3842c036fae1b3417b2181dd93b1ff4a0b706e62142fef9215",
+      "bytes": 52863
+    },
+    {
+      "path": "script/audio/music.mp3",
+      "key": "objects/c0/c073659d78d155d72cec8bd49930ce35ac865b24c0a599125ce9f2cf0479ee56",
+      "sha256": "c073659d78d155d72cec8bd49930ce35ac865b24c0a599125ce9f2cf0479ee56",
+      "bytes": 1058444
+    },
+    {
+      "path": "script/audio/narration.wav",
+      "key": "objects/23/23ec60807930b70080efb3fa507742c898d11103d2711e4fc972727d9a0a3a4d",
+      "sha256": "23ec60807930b70080efb3fa507742c898d11103d2711e4fc972727d9a0a3a4d",
+      "bytes": 1376334
+    }
+  ]
+}

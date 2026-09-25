@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "mode": "continuous",
+  "provider": "elevenlabs",
+  "voiceId": "21m00Tcm4TlvDq8ikWAM",
+  "voiceName": "Rachel",
+  "modelId": "eleven_multilingual_v2",
+  "language": "es-419",
+  "voiceSettings": {
+    "stability": 0.5,
+    "similarity_boost": 0.8,
+    "style": 0.15,
+    "use_speaker_boost": true
+  },
+  "text": "Un video se arma con escenas encadenadas, sin huecos entre cortes. La narración continua suena una sola vez.\n\nCada recurso se resuelve por id desde el manifiesto de assets, con su hash y sus medidas.",
+  "fingerprint": "dade6c276c9a9893343b19e0e03e7f90288fc6ce947e519852746f8d56792ee5",
+  "wavSha256": "23ec60807930b70080efb3fa507742c898d11103d2711e4fc972727d9a0a3a4d",
+  "durationSeconds": 15.60381,
+  "scenes": [
+    {
+      "sceneId": "intro",
+      "startSeconds": 0,
+      "endSeconds": 8.684,
+      "durationSeconds": 8.684
+    },
+    {
+      "sceneId": "asset-shot",
+      "startSeconds": 8.684,
+      "endSeconds": 15.60381,
+      "durationSeconds": 6.91981
+    }
+  ],
+  "wav": "script/audio/narration.wav",
+  "generatedAt": "2026-09-25T07:58:12.581Z"
+}

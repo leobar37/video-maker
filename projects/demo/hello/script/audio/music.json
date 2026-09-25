@@ -1,0 +1,10 @@
+{
+  "provider": "library",
+  "model": "pad-v1",
+  "bedId": "demo-soft-pad",
+  "bedName": "Demo soft pad",
+  "prompt": "Soft F-major pad bed for the demo pipeline (locally synthesized, $0).",
+  "durationSeconds": 24,
+  "reusedFrom": "demo/hello",
+  "reusedAt": "2026-09-25T19:17:50.801Z"
+}

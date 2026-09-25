@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-25T19:18:23.030Z",
+  "mode": "live",
+  "project": "projects/demo/hello",
+  "video": {
+    "id": "hello",
+    "mp4": "renders/hello.mp4",
+    "sha256": "3efc7565dd09d3f1bc82c8f1baef34b3426c9c61cc64ef72493e5e0c3ed3ce39",
+    "durationSeconds": 15.741,
+    "bytes": 1222777
+  },
+  "render": {
+    "startedAt": "2026-09-25T19:17:50.801Z",
+    "endedAt": "2026-09-25T19:18:22.172Z",
+    "renderTimeSeconds": 31.371,
+    "totalFrames": 468,
+    "fps": 30
+  },
+  "spend": {
+    "capUsd": 5,
+    "plannedUsd": 0,
+    "totalJournalledUsd": 0.0597,
+    "remainingUsd": 4.9403,
+    "operations": [
+      {
+        "command": "gen-audio",
+        "subject": "gen-audio:dade6c276c9a9893343b19e0e03e7f90",
+        "attemptId": "71145fc0-98b0-46ce-807a-ebb8c25a1f49",
+        "state": "completed",
+        "actualCostUsd": 0.0597,
+        "receiptRequestId": "tts-gen-audio:dade6c276c9a9893343b19e0e03e7f90"
+      }
+    ]
+  },
+  "journal": {
+    "submitted": 0,
+    "completed": 1,
+    "uncertain": 0,
+    "reconciled": 0
+  },
+  "loudness": {
+    "integratedLufs": -14,
+    "truePeakDbtp": -1,
+    "targetLufs": -14,
+    "lufsTolerance": 1,
+    "targetTruePeakDbtp": -1,
+    "passed": true
+  },
+  "checks": [
+    {
+      "code": "qa-verification",
+      "label": "Evidence verification (hashes + loudness re-measure) passed",
+      "status": "pass",
+      "detail": "2 check(s) verified against qa/report.json."
+    },
+    {
+      "code": "publish-dry-run",
+      "label": "Publication planned in dry-run mode (nothing was published)",
+      "status": "pass",
+      "detail": "plan mode only: no publisher call, no credentials resolved (NFR-002)."
+    },
+    {
+      "code": "render-probe",
+      "label": "Render has duration > 0 and an audio stream (ffprobe)",
+      "status": "pass",
+      "detail": "renders/hello.mp4: 15.74s with an audio stream."
+    },
+    {
+      "code": "loudness-tolerance",
+      "label": "Loudness within tolerance per qa/loudness.json",
+      "status": "pass",
+      "detail": "I=-14.00 LUFS, TP=-1.00 dBTP vs -14±1 LUFS / TP ≤ -1 dBTP on renders/hello.mp4"
+    },
+    {
+      "code": "journal-integrity",
+      "label": "Spend journal holds receipts and no unresolved attempts",
+      "status": "pass",
+      "detail": "1 attempt(s), 1 completed, $0.0597 journalled."
+    },
+    {
+      "code": "secret-grep",
+      "label": "No plausible secrets in qa/, journals, project JSON or bundles",
+      "status": "pass",
+      "detail": "10 artifact file(s) scanned; nothing found."
+    }
+  ],
+  "passed": true
+}

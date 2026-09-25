@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-25T19:18:22.556Z",
+  "file": "renders/hello.mp4",
+  "measured": {
+    "integratedLufs": -14,
+    "loudnessRangeLu": 0.9,
+    "truePeakDbtp": -1
+  },
+  "tolerance": {
+    "targetLufs": -14,
+    "lufsTolerance": 1,
+    "targetTruePeakDbtp": -1
+  },
+  "passed": true
+}

@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "remotion": ["../../../packages/motion-remotion/node_modules/remotion"],
+      "react": ["../../../packages/motion-remotion/node_modules/@types/react/index.d.ts"],
+      "react/*": ["../../../packages/motion-remotion/node_modules/@types/react/*"],
+      "react-dom": ["../../../packages/motion-remotion/node_modules/react-dom"],
+      "@videomaker/motion-core": ["../../../packages/motion-core/src/index.ts"],
+      "@videomaker/motion-remotion": ["../../../packages/motion-remotion/src/index.ts"]
+    }
+  },
+  "include": ["remotion/**/*"]
+}

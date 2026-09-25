@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-25T19:18:22.556Z",
+  "command": "qa",
+  "result": {
+    "mp4": "renders/hello.mp4",
+    "sha256": "3efc7565dd09d3f1bc82c8f1baef34b3426c9c61cc64ef72493e5e0c3ed3ce39",
+    "qaPassed": true,
+    "durationSeconds": 15.741
+  },
+  "artifacts": [
+    {
+      "path": "renders/hello.mp4",
+      "role": "render",
+      "sha256": "3efc7565dd09d3f1bc82c8f1baef34b3426c9c61cc64ef72493e5e0c3ed3ce39",
+      "bytes": 1222777
+    },
+    {
+      "path": "public/media/narration.wav",
+      "role": "narration-master",
+      "sha256": "23ec60807930b70080efb3fa507742c898d11103d2711e4fc972727d9a0a3a4d",
+      "bytes": 1376334
+    },
+    {
+      "path": "public/media/asset-shot.mp4",
+      "role": "scene-media:demo-app",
+      "sha256": "1f44d700380a7f3842c036fae1b3417b2181dd93b1ff4a0b706e62142fef9215",
+      "bytes": 52863
+    },
+    {
+      "path": "qa/loudness.json",
+      "role": "loudness-report",
+      "sha256": "297543f579c4aea61c6e62d633a416fa720fd1acc7c92c4451cbe291711bc4c9",
+      "bytes": 314
+    }
+  ],
+  "inputs": [
+    {
+      "path": "script/audio/narration.wav",
+      "role": "narration-master",
+      "sha256": "23ec60807930b70080efb3fa507742c898d11103d2711e4fc972727d9a0a3a4d",
+      "source": "script/audio/narration.json#wavSha256"
+    },
+    {
+      "path": "script/audio/narration.json",
+      "role": "narration-timings",
+      "sha256": "1fd1186222bfb9c2132338e3d11bcdf8236f9bdcadcd8354c42de2ddd84e2b28",
+      "source": "gen-audio (fingerprint dade6c276c9a…)"
+    },
+    {
+      "path": "scenes/asset-shot/capture.mp4",
+      "role": "scene-media:demo-app",
+      "sha256": "1f44d700380a7f3842c036fae1b3417b2181dd93b1ff4a0b706e62142fef9215",
+      "source": "capture (scene asset-shot)"
+    },
+    {
+      "path": "script/audio/music.mp3",
+      "role": "music-bed",
+      "sha256": "c073659d78d155d72cec8bd49930ce35ac865b24c0a599125ce9f2cf0479ee56",
+      "source": "gen-music"
+    }
+  ],
+  "checks": [
+    {
+      "code": "artifact-hashes",
+      "label": "Produced artifacts match their recorded sha256",
+      "status": "pass",
+      "detail": "4 artifact(s) re-hashed and verified."
+    },
+    {
+      "code": "loudness",
+      "label": "Loudness within tolerance (ebur128)",
+      "status": "pass",
+      "detail": "measured I=-14.00 LUFS, TP=-1.00 dBTP on renders/hello.mp4 vs tolerance -14±1 LUFS / TP ≤ -1 dBTP"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "attempts": [
+    {
+      "schemaVersion": 1,
+      "attemptId": "71145fc0-98b0-46ce-807a-ebb8c25a1f49",
+      "planDigest": "af474d3d3b92cad6b288a7295c3fa5b70a2167d5418bff7536a183e2e055d702",
+      "command": "gen-audio",
+      "subject": "gen-audio:dade6c276c9a9893343b19e0e03e7f90",
+      "reservedUsd": 0.0597,
+      "createdAt": "2026-09-25T07:58:07.942Z",
+      "state": "submitted",
+      "receipt": {
+        "requestId": "tts-gen-audio:dade6c276c9a9893343b19e0e03e7f90"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "attemptId": "71145fc0-98b0-46ce-807a-ebb8c25a1f49",
+      "planDigest": "af474d3d3b92cad6b288a7295c3fa5b70a2167d5418bff7536a183e2e055d702",
+      "command": "gen-audio",
+      "subject": "gen-audio:dade6c276c9a9893343b19e0e03e7f90",
+      "reservedUsd": 0.0597,
+      "createdAt": "2026-09-25T07:58:12.585Z",
+      "state": "completed",
+      "receipt": {
+        "requestId": "tts-gen-audio:dade6c276c9a9893343b19e0e03e7f90"
+      }
+    }
+  ]
+}
