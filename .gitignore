@@ -18,3 +18,24 @@ coverage/
 # Video/clip projects: generated artifacts (source media, frames, analysis,
 # renders, dashboards, spend/publication journals) — never repo material.
 projects/
+# Project folders of content work (posts, covers) — preserved on disk and
+# backed up, never committed.
+bfc/
+
+# Media never belongs in git: images/videos/audio live in R2 or project
+# folders. Force-add a fixture explicitly if one is ever truly required.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.flac
+*.opus
