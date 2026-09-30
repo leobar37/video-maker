@@ -92,6 +92,14 @@ export interface AudioNormalizationOptions extends LoudnessGate {
   cycles?: number;
   /** Independent ebur128 verification + corrective gain. Default true. */
   verify?: boolean;
+  /**
+   * Explicit output cap in seconds for every apply/correction pass (`apad` +
+   * output `-t`). Pass the VIDEO span (`expectedDurationInFrames / fps`): it
+   * WINS over the banner-derived container duration, so the AAC quantization
+   * (~1 frame + priming) can never push the container past the expected
+   * length. Absent: the banner-derived behavior (input container duration).
+   */
+  capDurationSeconds?: number;
   log?: (message: string) => void;
 }
 
@@ -138,17 +146,24 @@ export function buildLoudnormMeasureArgs(file: string, gate: LoudnessGate = {}):
  * The output muxer is pinned with `-f mp4`: ffmpeg cannot infer a container
  * from a bare temp name, and this stage targets the pipeline's h264 mp4
  * renders.
+ *
+ * `capDurationSeconds` bounds the output to the INPUT file's duration: the
+ * AAC re-encode of dynamic loudnorm pads ~0.2 s of audio tail, which would
+ * otherwise make the container outlive the rendered video. `apad` fills the
+ * chain to the cap and the output `-t` cuts exactly there.
  */
 export function buildLoudnormApplyArgs(
   file: string,
   output: string,
   measured: LoudnormStats,
   gate: LoudnessGate = {},
+  capDurationSeconds?: number,
 ): string[] {
   const filter =
     `${loudnormFilter(gate)}:measured_I=${measured.inputI}:measured_TP=${measured.inputTp}` +
     `:measured_LRA=${measured.inputLra}:measured_thresh=${measured.inputThresh}` +
-    `:offset=${measured.targetOffset}:print_format=summary`;
+    `:offset=${measured.targetOffset}:print_format=summary` +
+    (capDurationSeconds !== undefined ? ',apad' : '');
   return [
     '-y',
     '-i',
@@ -163,6 +178,7 @@ export function buildLoudnormApplyArgs(
     '192k',
     '-ar',
     '48000',
+    ...(capDurationSeconds !== undefined ? ['-t', String(capDurationSeconds)] : []),
     '-f',
     'mp4',
     output,
@@ -176,19 +192,22 @@ export function buildEbur128MeasureArgs(file: string): string[] {
 
 /**
  * Corrective gain reduction (video copied, audio re-encoded). Muxer pinned
- * with `-f mp4`, same as the loudnorm apply pass.
+ * with `-f mp4`, same as the loudnorm apply pass — and the same
+ * `capDurationSeconds` bound, so this AAC re-encode cannot extend the
+ * container past the input duration either.
  */
 export function buildGainReductionArgs(
   file: string,
   output: string,
   reductionDb: number,
+  capDurationSeconds?: number,
 ): string[] {
   return [
     '-y',
     '-i',
     file,
     '-af',
-    `volume=-${reductionDb.toFixed(2)}dB`,
+    `volume=-${reductionDb.toFixed(2)}dB` + (capDurationSeconds !== undefined ? ',apad' : ''),
     '-c:v',
     'copy',
     '-c:a',
@@ -197,6 +216,7 @@ export function buildGainReductionArgs(
     '192k',
     '-ar',
     '48000',
+    ...(capDurationSeconds !== undefined ? ['-t', String(capDurationSeconds)] : []),
     '-f',
     'mp4',
     output,
@@ -225,6 +245,19 @@ export function parseLoudnormJson(stderr: string): LoudnormStats {
     inputThresh: number('input_thresh'),
     targetOffset: number('target_offset'),
   };
+}
+
+/**
+ * Parse ffmpeg's `Duration: HH:MM:SS.cc` input banner into seconds. This is
+ * the file's container duration (the same fact an ffprobe of the file would
+ * report, for free on any `-i` stderr). `undefined` when the banner is absent
+ * (synthetic runners) — a cap is then skipped, never guessed.
+ */
+export function parseFfmpegDurationSeconds(stderr: string): number | undefined {
+  const match = stderr.match(/Duration:\s+(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!match) return undefined;
+  const seconds = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  return Number.isFinite(seconds) ? seconds : undefined;
 }
 
 /**
@@ -351,10 +384,26 @@ export async function normalizeAudioLoudness(
 ): Promise<AudioNormalizationResult> {
   if (!options.enabled) return { applied: false };
 
+  const explicitCap = options.capDurationSeconds;
+  if (explicitCap !== undefined && !(Number.isFinite(explicitCap) && explicitCap > 0)) {
+    throw new Error(
+      `normalizeAudioLoudness: capDurationSeconds must be a finite positive number of ` +
+        `seconds (got ${String(explicitCap)}).`,
+    );
+  }
+
   const runner = options.runner ?? processFfmpegRunner;
   const cycles = options.cycles ?? DEFAULTS.cycles;
   const log = options.log ?? (() => {});
   const gate: LoudnessGate = options;
+
+  // The cap every apply/correction pass must respect: an explicit
+  // `options.capDurationSeconds` (the VIDEO span) WINS over the input file's
+  // container duration read from the measure pass's `-i` banner (the ffprobe
+  // fact, for free — zero extra ffmpeg calls). The AAC re-encode of dynamic
+  // loudnorm pads ~0.2 s of audio tail and quantizes up ~1 AAC frame; capping
+  // at the video span keeps the container inside the expected length.
+  let capDurationSeconds: number | undefined = explicitCap;
 
   for (let cycle = 1; cycle <= cycles; cycle += 1) {
     const measure = await runFfmpeg(
@@ -362,13 +411,14 @@ export async function normalizeAudioLoudness(
       buildLoudnormMeasureArgs(file, gate),
       'loudnorm measurement',
     );
+    capDurationSeconds ??= parseFfmpegDurationSeconds(measure.stderr);
     const stats = parseLoudnormJson(measure.stderr);
     log(
       `loudnorm cycle ${cycle}: measured I=${stats.inputI} LUFS, TP=${stats.inputTp} dBTP ` +
         `-> ${gate.targetLufs ?? DEFAULTS.targetLufs}/${gate.targetTruePeakDbtp ?? DEFAULTS.targetTruePeakDbtp}.`,
     );
     await reencodeInPlace(runner, file, 'loudnorm application', (tmp) =>
-      buildLoudnormApplyArgs(file, tmp, stats, gate),
+      buildLoudnormApplyArgs(file, tmp, stats, gate, capDurationSeconds),
     );
   }
 
@@ -380,7 +430,7 @@ export async function normalizeAudioLoudness(
   if (decision.apply) {
     log(`ebur128 gate: ${decision.reason}; reducing ${decision.reductionDb.toFixed(2)} dB.`);
     await reencodeInPlace(runner, file, 'true-peak correction', (tmp) =>
-      buildGainReductionArgs(file, tmp, decision.reductionDb),
+      buildGainReductionArgs(file, tmp, decision.reductionDb, capDurationSeconds),
     );
     corrected = true;
     stats = await measureCompliance(runner, file);

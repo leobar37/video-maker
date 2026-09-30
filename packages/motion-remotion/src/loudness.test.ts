@@ -12,6 +12,7 @@ import {
   decideCorrection,
   normalizeAudioLoudness,
   parseEbur128Summary,
+  parseFfmpegDurationSeconds,
   parseLoudnormJson,
   passesLoudnessGate,
   type FfmpegResult,
@@ -83,6 +84,24 @@ describe('loudness arg builders', () => {
     expect(gain.slice(-3, -1)).toEqual(['-f', 'mp4']);
     expect(gain[gain.length - 1]).toBe('/renders/tmp.mp4');
   });
+
+  test('apply and correction passes cap the output to the input duration', () => {
+    const apply = buildLoudnormApplyArgs(
+      '/renders/out.mp4',
+      '/renders/tmp.mp4',
+      MEASURED,
+      {},
+      43.78,
+    );
+    // `apad` appended to the audio chain + output `-t` before the muxer pin:
+    // the AAC re-encode can never extend the container past the input file.
+    expect(apply[apply.indexOf('-af') + 1]!).toContain('print_format=summary,apad');
+    expect(apply.slice(apply.indexOf('-t'), apply.indexOf('-t') + 2)).toEqual(['-t', '43.78']);
+    expect(apply.slice(-3, -1)).toEqual(['-f', 'mp4']);
+    const gain = buildGainReductionArgs('/renders/out.mp4', '/renders/tmp.mp4', 1.1, 43.78);
+    expect(gain[gain.indexOf('-af') + 1]!).toContain('volume=-1.10dB,apad');
+    expect(gain.slice(gain.indexOf('-t'), gain.indexOf('-t') + 2)).toEqual(['-t', '43.78']);
+  });
 });
 
 describe('loudness parsers', () => {
@@ -100,6 +119,18 @@ describe('loudness parsers', () => {
     expect(stats.loudnessRangeLu).toBe(3.1);
     expect(stats.truePeakDbtp).toBe(-0.6);
     expect(() => parseEbur128Summary('I: -70.0 LUFS')).toThrow(/summary/);
+  });
+
+  test('parseFfmpegDurationSeconds reads the -i banner Duration line', () => {
+    expect(
+      parseFfmpegDurationSeconds(
+        'Input #0, mov,mp4, from "out.mp4":\n' +
+          '  Duration: 00:00:43.78, start: 0.000000, bitrate: 1234 kb/s\n',
+      ),
+    ).toBe(43.78);
+    expect(parseFfmpegDurationSeconds('  Duration: 01:02:03.50, start: 0.000000')).toBe(3723.5);
+    expect(parseFfmpegDurationSeconds('no banner here')).toBeUndefined();
+    expect(parseFfmpegDurationSeconds('  Duration: N/A')).toBeUndefined();
   });
 });
 
@@ -147,6 +178,8 @@ describe('normalizeAudioLoudness stage', () => {
   function fakeRunner(options: {
     peaks: number[];
     integrated?: number[];
+    /** `-i` banner prefix of the measure stderr (carries the `Duration:` line). */
+    measureBanner?: string;
     /** When the joined argv contains this, the run fails (after writing its output). */
     failOn?: string;
   }): { runner: FfmpegRunner; calls: string[][] } {
@@ -161,7 +194,7 @@ describe('normalizeAudioLoudness stage', () => {
           const joined = args.join(' ');
           let stderr = '';
           if (joined.includes('print_format=json')) {
-            stderr = LOUDNORM_JSON;
+            stderr = `${options.measureBanner ?? ''}${LOUDNORM_JSON}`;
           } else if (joined.includes('ebur128=peak=true')) {
             const peak = options.peaks[Math.min(peakIndex, options.peaks.length - 1)]!;
             peakIndex += 1;
@@ -257,5 +290,59 @@ describe('normalizeAudioLoudness stage', () => {
     // pass must not damage it nor leave its temp behind.
     expect(await readFile(file, 'utf8')).toBe('rendered');
     await expect(stat(`${file}.norm.tmp.mp4`)).rejects.toThrow();
+  });
+
+  test('every AAC re-encode is capped to the measured input duration', async () => {
+    const file = await tempRender();
+    const { runner, calls } = fakeRunner({
+      peaks: [-0.6, -1.2],
+      measureBanner: '  Duration: 00:00:43.78, start: 0.000000, bitrate: 1234 kb/s\n',
+    });
+    const result = await normalizeAudioLoudness(file, { enabled: true, runner, cycles: 1 });
+    expect(result.corrected).toBe(true);
+    // The loudnorm apply AND the true-peak correction stay within the input
+    // duration (`apad` + `-t`): the container can never outlive the rendered
+    // video, whatever the AAC encoder pads onto the tail.
+    const capped = calls.filter((args) => args.join(' ').includes(',apad'));
+    expect(capped).toHaveLength(2);
+    for (const args of capped) {
+      expect(args.slice(args.indexOf('-t'), args.indexOf('-t') + 2)).toEqual(['-t', '43.78']);
+      expect(args.slice(-3, -1)).toEqual(['-f', 'mp4']);
+    }
+    // Measurement passes never carry the cap (they only read the file).
+    const measure = calls.find((args) => args.join(' ').includes('print_format=json'))!;
+    expect(measure.indexOf('-t')).toBe(-1);
+  });
+
+  test('an explicit capDurationSeconds wins over the banner-derived duration', async () => {
+    const file = await tempRender();
+    const { runner, calls } = fakeRunner({
+      peaks: [-1.4],
+      measureBanner: '  Duration: 00:00:43.78, start: 0.000000, bitrate: 1234 kb/s\n',
+    });
+    await normalizeAudioLoudness(file, {
+      enabled: true,
+      runner,
+      cycles: 1,
+      capDurationSeconds: 43.5,
+    });
+    // The VIDEO span (frames / fps) caps the AAC re-encode, not the banner's
+    // audio-inclusive container duration.
+    const capped = calls.filter((args) => args.join(' ').includes(',apad'));
+    expect(capped).toHaveLength(1);
+    expect(capped[0]!.slice(capped[0]!.indexOf('-t'), capped[0]!.indexOf('-t') + 2)).toEqual([
+      '-t',
+      '43.5',
+    ]);
+  });
+
+  test('an invalid explicit cap fails loudly (finite-positive validation)', async () => {
+    const file = await tempRender();
+    const { runner, calls } = fakeRunner({ peaks: [-1.4] });
+    await expect(
+      normalizeAudioLoudness(file, { enabled: true, runner, cycles: 1, capDurationSeconds: -1 }),
+    ).rejects.toThrow(/capDurationSeconds/);
+    // Validation happens before any ffmpeg work.
+    expect(calls.length).toBe(0);
   });
 });
