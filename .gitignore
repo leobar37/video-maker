@@ -14,3 +14,7 @@ id_rsa*
 .DS_Store
 coverage/
 .tmp-*
+
+# Video/clip projects: generated artifacts (source media, frames, analysis,
+# renders, dashboards, spend/publication journals) — never repo material.
+projects/
