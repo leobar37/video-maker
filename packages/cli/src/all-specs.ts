@@ -6,6 +6,7 @@
  * The tiny inline `version` spec proves the point: a complete command with no
  * dedicated module, registered and executed like every other.
  */
+import { clipAnalysisSpecs, clipDecisionSpecs, clipRenderSpecs } from './specs/clip';
 import { inspectSpecs } from './specs/inspect';
 import { mediaSpecs } from './specs/media';
 import { persistSpecs } from './specs/persist';
@@ -32,5 +33,14 @@ const versionSpec: CommandSpec = {
 
 /** Every command of the CLI, in display order. */
 export function allSpecs(): CommandSpec[] {
-  return [...inspectSpecs, ...sceneSpecs, ...mediaSpecs, ...persistSpecs, versionSpec];
+  return [
+    ...inspectSpecs,
+    ...sceneSpecs,
+    ...mediaSpecs,
+    ...persistSpecs,
+    ...clipAnalysisSpecs,
+    ...clipDecisionSpecs,
+    ...clipRenderSpecs,
+    versionSpec,
+  ];
 }
