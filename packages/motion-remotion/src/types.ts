@@ -14,7 +14,7 @@ import type {
 import type { AssetManifestEntry } from './assets';
 import type { BrandTokens } from './brand';
 
-export type FilmSceneSource = 'demo-app' | 'motion' | 'fal-video' | 'avatar';
+export type FilmSceneSource = 'demo-app' | 'motion' | 'fal-video' | 'avatar' | 'clip';
 
 /**
  * One scene of a film. `intent` selects the renderer from the scene registry
@@ -56,6 +56,23 @@ export interface FilmScene {
   track?: { viewport: Viewport; interactions: InteractionEvent[] };
   /** Optional per-scene override for directed camera framing. */
   cameraProfile?: Partial<CameraProfile>;
+  /**
+   * Clip layout, consumed by clip intents only (`clip-vertical` takes
+   * `'single'`, `clip-podcast` takes `'duo'`); ignored by every other intent.
+   */
+  layout?: 'single' | 'duo';
+  /**
+   * Face boxes from the clip analysis, consumed by clip intents only
+   * (`clip-podcast` crops each half of the duo to one face). Bounding boxes
+   * are `[x, y, w, h]` in normalized 0–1000 coordinates over the source
+   * video frame; `presence` is the fraction of the clip the face is visible.
+   * Ignored by every other intent.
+   */
+  faces?: ReadonlyArray<{
+    id: string;
+    bbox: [number, number, number, number];
+    presence?: number;
+  }>;
 }
 
 /** Scenes consume the film's brand tokens (warm canvas, accent, fonts). */
