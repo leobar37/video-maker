@@ -8,6 +8,7 @@ export * from './execution';
 export * from './scene';
 export * from './narration';
 export * from './catalog';
+export * from './clip';
 
 /**
  * Current (latest) `schemaVersion` per contract. Older versions remain
@@ -21,6 +22,10 @@ export const SCHEMA_VERSIONS = {
   sceneResult: 3,
   narration: 1,
   catalog: 3,
+  frameAnalysis: 1,
+  scoringWeights: 1,
+  clipRange: 1,
+  clipDecision: 1,
 } as const;
 
 export type SchemaContract = keyof typeof SCHEMA_VERSIONS;
