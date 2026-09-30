@@ -5,6 +5,7 @@
  * values never reach stdout (NFR-001).
  */
 import { describe, expect, it } from 'bun:test';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { main, runSmokePlan, type SmokeOptions } from './smoke';
@@ -104,6 +105,9 @@ describe('smoke script process (offline by construction)', () => {
   async function runSmoke(env: Record<string, string>): Promise<{ code: number; stdout: string }> {
     const proc = Bun.spawn([process.execPath, SMOKE_SCRIPT, '--plan'], {
       env,
+      // Hermetic: bun auto-loads `.env` from the process cwd — run from a
+      // neutral directory so only `env` decides name presence.
+      cwd: tmpdir(),
       stdout: 'pipe',
       stderr: 'pipe',
     });
