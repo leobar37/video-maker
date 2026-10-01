@@ -272,6 +272,26 @@ describe('ClipRangeSchema', () => {
     expect(ClipStatusSchema.safeParse('maybe').success).toBe(false);
   });
 
+  test('round-trips a range carrying its review journal', () => {
+    const withRevisions = {
+      ...rangeFixture,
+      revisions: [{ round: 1, verdict: 'revise' as const, issues: ['weak hook'], applied: true }],
+    };
+    expect(roundTrip(ClipRangeSchema, withRevisions)).toEqual(withRevisions);
+    expect(
+      ClipRangeSchema.safeParse({
+        ...rangeFixture,
+        revisions: [{ round: 0, verdict: 'pass', issues: [], applied: true }],
+      }).success,
+    ).toBe(false);
+    expect(
+      ClipRangeSchema.safeParse({
+        ...rangeFixture,
+        revisions: [{ round: 1, verdict: 'x', issues: [], applied: true }],
+      }).success,
+    ).toBe(false);
+  });
+
   test('rejects score outside 0–1', () => {
     expect(ClipRangeSchema.safeParse(withRange({ score: 1.5 })).success).toBe(false);
     expect(ClipRangeSchema.safeParse(withRange({ score: -0.1 })).success).toBe(false);

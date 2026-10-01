@@ -5,6 +5,7 @@
  * dirs).
  */
 import { describe, expect, test } from 'bun:test';
+import { writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
@@ -27,8 +28,19 @@ import {
   buildClipCards,
   buildClipFilmProps,
   buildShardsManifest,
+  buildWindowShards,
+  buildCriticState,
+  compactCandidatesForReview,
+  downloadClipSource,
   explainCandidate,
+  applyCriticVerdicts,
+  selectDistinctSpans,
+  truncateTranscriptSlice,
+  REVIEW_CANDIDATE_LIMIT,
+  REVIEW_STATE_CHAR_BUDGET,
+  isRemoteSource,
   locateAt,
+  parseCriticResponse,
   planStripGrid,
   polishRanges,
   probeSource,
@@ -37,8 +49,10 @@ import {
   renderStripGrid,
   resolveFrameAt,
   runClipFrames,
+  runClipFramesKeys,
   runClipPolish,
   sampleFrames,
+  sampleKeyFrames,
   scoreWindow,
   socialFallback,
   transcribeToTranscript,
@@ -47,6 +61,7 @@ import {
   type ClipDashboardCard,
   type ClipWord,
   type FrameEntry,
+  type ProposedWindow,
   type ShardsManifest,
 } from './clip';
 import { makeTestProject } from './test-support';
@@ -463,16 +478,56 @@ describe('runClipFrames', () => {
     assertShardsCoverFrames(first.frames.frames, first.shards);
   });
 
-  test('rejects URL sources with an actionable yt-dlp error before any process run', async () => {
+  test('fetches URL sources with yt-dlp into clips/source.mp4 and records sourceUrl', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'vm-clip-url-'));
-    const { runner, calls } = mediaRunner();
+    const url = 'https://www.youtube.com/watch?v=abc123';
+    const { runner, calls } = fakeProcess((command, args) => {
+      if (command === 'yt-dlp') {
+        writeFileSync(args[args.indexOf('-o') + 1], 'downloaded');
+        return { code: 0, stdout: '', stderr: '' };
+      }
+      if (command === 'ffprobe') {
+        return { code: 0, stdout: PROBE_JSON, stderr: '' };
+      }
+      return { code: 0, stdout: '', stderr: '' };
+    });
+
+    const result = await runClipFrames(runner, dir, { srcPath: url, ...options });
+
+    const ytdlp = calls.find((call) => call.command === 'yt-dlp');
+    expect(ytdlp?.args).toContain(url);
+    expect(ytdlp?.args).toContain(join(dir, 'clips', 'source.mp4'));
+    expect(calls[0]?.command).toBe('yt-dlp');
+    const source = JSON.parse(await readFile(join(dir, 'clips', 'source.json'), 'utf8'));
+    expect(source.sourceUrl).toBe(url);
+    expect(source.path).toBe(join(dir, 'clips', 'source.mp4'));
+    expect(result.frames.frames.map((frame) => frame.t)).toEqual([0, 2, 3.5, 4]);
+  });
+
+  test('yt-dlp failures are actionable and skip probing entirely', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-clip-url-fail-'));
+    const { runner, calls } = fakeProcess((command) => {
+      if (command === 'yt-dlp') {
+        return { code: 1, stdout: '', stderr: 'video unavailable' };
+      }
+      return { code: 0, stdout: PROBE_JSON, stderr: '' };
+    });
     await expect(
       runClipFrames(runner, dir, {
         srcPath: 'https://www.youtube.com/watch?v=abc123',
         ...options,
       }),
-    ).rejects.toThrow(/yt-dlp/);
+    ).rejects.toThrow(/yt-dlp failed .*exit 1.*video unavailable/s);
+    expect(calls.map((call) => call.command)).toEqual(['yt-dlp']);
+  });
+
+  test('downloadClipSource rejects non-URL input without touching processes', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-clip-dl-'));
+    const { runner, calls } = fakeProcess(() => ({ code: 0, stdout: '', stderr: '' }));
+    await expect(downloadClipSource(runner, dir, 'local.mp4')).rejects.toThrow(/http\(s\) URL/);
     expect(calls).toHaveLength(0);
+    expect(isRemoteSource('https://example.com/v')).toBe(true);
+    expect(isRemoteSource('/tmp/v.mp4')).toBe(false);
   });
 
   test('surfaces ffmpeg extraction failures naming the frame', async () => {
@@ -1816,27 +1871,40 @@ describe('renderClipsDashboard', () => {
     expect(html).not.toContain('onerror="alert(1)"');
   });
 
-  test('renders one card per clip with score, layout, status and frame_ids', () => {
+  test('renders one compact card per clip with score, layout and status (no frame_ids)', () => {
     const html = renderClipsDashboard({
       header: 'My clips',
       cards: [
-        dashboardCard(),
+        dashboardCard({ videoPath: '../../renders/clips/clip-01.mp4' }),
         dashboardCard({
           id: 'clip-02',
           title: 'Second title',
           description: 'Second description.',
-          hashtags: ['two'],
+          hashtags: ['two', '#three'],
           score: 0.5,
           layout: 'duo',
           status: 'approved',
           start: 6,
           end: 12,
           frameIds: ['f-000003'],
+          stillPath: '../frames/f-000003.jpg',
+          videoPath: '../../renders/clips/clip-02.mp4',
+        }),
+        dashboardCard({
+          id: 'clip-03',
+          title: 'No render yet',
+          description: 'Candidate without a player.',
+          hashtags: ['draft'],
+          status: 'candidate',
+          start: 12,
+          end: 18,
+          frameIds: [],
+          stillPath: '../frames/f-000009.jpg',
         }),
       ],
     });
 
-    expect(html.match(/class="card"/g)).toHaveLength(2);
+    expect(html.match(/class="card"/g)).toHaveLength(3);
     expect(html).toContain('<title>My clips</title>');
     expect(html).toContain('<h1>My clips</h1>');
     expect(html).toContain('id clip-01');
@@ -1845,9 +1913,47 @@ describe('renderClipsDashboard', () => {
     expect(html).toContain('layout duo');
     expect(html).toContain('>candidate<');
     expect(html).toContain('>approved<');
-    expect(html).toContain('frame_ids');
-    expect(html).toContain('<code>f-000002</code>');
-    expect(html).toContain('<code>f-000003</code>');
+    // frame_ids are pipeline data, not human-facing: never rendered.
+    expect(html).not.toContain('frame_ids');
+    expect(html).not.toContain('<code>f-000002</code>');
+    // One player per card WITH a videoPath (rendered clips): relative src,
+    // still as poster, preload=none, VERTICAL box centered. Cards without a
+    // render show the still — never a player that 404s.
+    expect(html.match(/<video controls/g)).toHaveLength(2);
+    expect(html).toContain(
+      '<video controls preload="none" src="../../renders/clips/clip-01.mp4"',
+    );
+    expect(html).toContain(
+      '<video controls preload="none" src="../../renders/clips/clip-02.mp4"',
+    );
+    expect(html).toContain('poster="../frames/f-000003.jpg"');
+    expect(html).toContain('aspect-ratio:9/16');
+    expect(html).toContain('margin:8px auto');
+    expect(html).toContain('alt="still clip-03"');
+    // Hashtags render as a single-hash list even when data carries '#'.
+    expect(html).toContain('<li>#three</li>');
+    expect(html).not.toContain('##three');
+    expect(html).not.toContain('<code>f-000003</code>');
+  });
+
+  test('lays clips out as a grid with CSS-only filters (no scripts)', () => {
+    const html = renderClipsDashboard({
+      header: 'My clips',
+      cards: [
+        dashboardCard({ videoPath: '../../renders/clips/clip-01.mp4', status: 'approved' }),
+        dashboardCard({ id: 'clip-03', status: 'candidate', stillPath: '../frames/f-000009.jpg' }),
+      ],
+    });
+    expect(html).toContain('<div class="grid">');
+    expect(html).toContain('grid-template-columns:repeat(auto-fill,minmax(230px,1fr))');
+    expect(html).toContain('data-status="approved"');
+    expect(html).toContain('data-video="1"');
+    expect(html).toContain('id="st-approved" checked');
+    expect(html).toContain(
+      'body:has(#st-approved:checked) .card:not([data-status=approved]){display:none}',
+    );
+    expect(html).toContain('body:has(#only-render:checked) .card:not([data-video="1"]){display:none}');
+    expect(html).not.toContain('<script');
   });
 
   test('is a self-contained offline page: no scripts, no http(s) resource references', () => {
@@ -2101,6 +2207,11 @@ describe('buildClipFilmProps', () => {
     const props = buildClipFilmProps(project, {
       range: renderRange('clip-01', 10, 20),
       analyses: renderAnalyses(),
+      words: [
+        { word: 'hola', start: 9.5, end: 10.2 },
+        { word: 'mundo', start: 10.5, end: 11.0 },
+        { word: 'fuera', start: 25, end: 26 },
+      ],
       sourceSize: { width: 1280, height: 720 },
       stagedVideoSrc: 'media/clips/clip-01.mp4',
       stagedAudioSrc: 'media/clips/clip-01.wav',
@@ -2127,6 +2238,9 @@ describe('buildClipFilmProps', () => {
     expect(props.narration).toBeUndefined();
     // The track viewport is the SOURCE frame, not the vertical canvas.
     expect(scene.track?.viewport).toEqual({ width: 1280, height: 720 });
+    // Burned-in subs come from the whisper word timestamps clipped to the
+    // window and REBASED to the clip clock (9.5s clamped to the 10s start).
+    expect(scene.subtitleSegments).toEqual([{ text: 'hola mundo', start: 0, end: 1 }]);
     // Frames at source t = 10, 11, 20 REBASED to the clip clock (0, 1, 10 s)
     // before quantization — outside frames (t = 8, 21) never leak in.
     expect(scene.track?.interactions.map((event) => event.t)).toEqual([0, 1, 10]);
@@ -2144,6 +2258,7 @@ describe('buildClipFilmProps', () => {
     const props = buildClipFilmProps(project, {
       range: renderRange('clip-02', 30, 45, { layout: 'duo', faceCount: 2 }),
       analyses: renderAnalyses(),
+      words: [{ word: 'duo', start: 31, end: 31.5 }],
       sourceSize: { width: 1280, height: 720 },
       stagedVideoSrc: 'media/clips/clip-02.mp4',
       stagedAudioSrc: 'media/clips/clip-02.wav',
@@ -2155,5 +2270,413 @@ describe('buildClipFilmProps', () => {
     expect(scene.layout).toBe('duo');
     expect(scene.faces).toHaveLength(2);
     expect(scene.durationInSeconds).toBe(15);
+    expect(scene.subtitleSegments).toEqual([{ text: 'duo', start: 1, end: 1.5 }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Part 6/6 — dense keyframes + window shards (`--keys`)
+// ---------------------------------------------------------------------------
+
+const KEY_WINDOWS: ProposedWindow[] = [
+  { id: 'win-01', start: 4, end: 8, preScore: 0.5, reason: 'fixture' },
+  { id: 'win-02', start: 20, end: 24, preScore: 0.9, reason: 'fixture' },
+];
+
+const KEY_BASE_FRAMES: FrameEntry[] = [
+  { frame_id: 'f-000001', t: 0, path: 'clips/frames/f-000001.jpg', rol: 'key' },
+  { frame_id: 'f-000002', t: 2, path: 'clips/frames/f-000002.jpg', rol: 'key' },
+  { frame_id: 'f-000003', t: 30, path: 'clips/frames/f-000003.jpg', rol: 'key' },
+];
+
+function keyFramesFixture(): FrameEntry[] {
+  return sampleKeyFrames({
+    durationSeconds: 32,
+    fps: 30,
+    frames: KEY_BASE_FRAMES,
+    windows: KEY_WINDOWS,
+    keyFps: 1,
+    keyMargin: 2,
+  });
+}
+
+describe('sampleKeyFrames', () => {
+  test('densifies window bodies as key and margins/regions as base', () => {
+    const frames = keyFramesFixture();
+    const rolAt = (t: number) => frames.find((frame) => frame.t === t)?.rol;
+    expect(rolAt(0)).toBe('base');
+    expect(rolAt(2)).toBe('base');
+    expect(rolAt(3)).toBe('base');
+    for (const t of [4, 5, 6, 7, 8, 20, 21, 22, 23, 24]) {
+      expect(rolAt(t)).toBe('key');
+    }
+    for (const t of [9, 10, 18, 19, 25, 26, 30]) {
+      expect(rolAt(t)).toBe('base');
+    }
+  });
+
+  test('merges, dedupes by t and renumbers f-<6 digits> in t order', () => {
+    const frames = keyFramesFixture();
+    expect(frames.map((frame) => frame.frame_id)).toEqual(
+      frames.map((_, index) => `f-${String(index + 1).padStart(6, '0')}`),
+    );
+    const times = frames.map((frame) => frame.t);
+    expect([...times].sort((a, b) => a - b)).toEqual(times);
+    expect(new Set(frames.map((frame) => frame.t)).size).toBe(frames.length);
+    expect(frames.every((frame) => frame.t < 32)).toBe(true);
+  });
+
+  test('is deterministic and validates its options', () => {
+    expect(keyFramesFixture()).toEqual(keyFramesFixture());
+    const base = {
+      durationSeconds: 32,
+      fps: 30,
+      frames: KEY_BASE_FRAMES,
+      windows: KEY_WINDOWS,
+    };
+    expect(() => sampleKeyFrames({ ...base, keyFps: 0 })).toThrow(/keyFps/);
+    expect(() => sampleKeyFrames({ ...base, keyMargin: -1 })).toThrow(/keyMargin/);
+    expect(() =>
+      sampleKeyFrames({
+        ...base,
+        windows: [{ id: 'win-09', start: 5, end: 5, preScore: 0.1, reason: 'x' }],
+      }),
+    ).toThrow(/start < end/);
+  });
+});
+
+describe('buildWindowShards', () => {
+  test('one shard per window, best preScore first, margins as context', () => {
+    const shards = buildWindowShards(keyFramesFixture(), KEY_WINDOWS, { keyMargin: 2 });
+    expect(shards.shardSize).toBe(0);
+    expect(shards.shards.map((shard) => shard.id)).toEqual(['shard-001', 'shard-002']);
+    const [best, second] = shards.shards;
+    // win-02 (preScore 0.9) is analyzed first.
+    expect(best?.frameIds.filter((id) => !best.contextOnlyFrameIds.includes(id))).toEqual(
+      keyFramesFixture()
+        .filter((frame) => frame.rol === 'key' && frame.t >= 20 && frame.t <= 24)
+        .map((frame) => frame.frame_id),
+    );
+    expect(best?.contextOnlyFrameIds).toEqual(
+      keyFramesFixture()
+        .filter((frame) => frame.t >= 18 && frame.t <= 26 && frame.rol === 'base')
+        .map((frame) => frame.frame_id),
+    );
+    expect(second?.frameIds.length).toBeGreaterThan(0);
+  });
+
+  test('skips windows without key frames and keeps determinism', () => {
+    const windows: ProposedWindow[] = [
+      ...KEY_WINDOWS,
+      { id: 'win-03', start: 31.9, end: 31.95, preScore: 1, reason: 'no frames' },
+    ];
+    const shards = buildWindowShards(keyFramesFixture(), windows, { keyMargin: 2 });
+    expect(shards.shards).toHaveLength(2);
+    expect(shards).toEqual(buildWindowShards(keyFramesFixture(), windows, { keyMargin: 2 }));
+  });
+});
+
+describe('runClipFramesKeys', () => {
+  async function keysProject(): Promise<{ dir: string; srcPath: string }> {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-clip-keys-'));
+    const srcPath = join(dir, 'source.mp4');
+    await writeFile(srcPath, 'abc');
+    await mkdir(join(dir, 'clips'), { recursive: true });
+    await writeFile(
+      join(dir, 'clips', 'source.json'),
+      JSON.stringify({ schemaVersion: 1, path: srcPath, durationSeconds: 32, fps: 30, sha256: SHA256_ABC }),
+    );
+    await writeFile(
+      join(dir, 'clips', 'frames.json'),
+      JSON.stringify({ schemaVersion: 1, frames: KEY_BASE_FRAMES }),
+    );
+    return { dir, srcPath };
+  }
+
+  test('extracts only the missing jpgs and rewrites frames/shards manifests', async () => {
+    const { dir } = await keysProject();
+    await mkdir(join(dir, 'clips', 'frames'), { recursive: true });
+    await writeFile(join(dir, 'clips', 'frames', 'f-000001.jpg'), 'x');
+    await writeFile(join(dir, 'clips', 'frames', 'f-000002.jpg'), 'x');
+    const { runner, calls } = mediaRunner();
+
+    const result = await runClipFramesKeys(runner, dir, {
+      windows: KEY_WINDOWS,
+      keyFps: 1,
+      keyMargin: 2,
+    });
+
+    expect(result.frames.frames).toEqual(keyFramesFixture());
+    expect(result.shards.shards.map((shard) => shard.id)).toEqual(['shard-001', 'shard-002']);
+    const ffmpegCalls = calls.filter((call) => call.command === 'ffmpeg');
+    // 21 candidate times, t=2 shared by the base pass and the dense grid ⇒ 20
+    // frames; 2 jpgs already on disk are skipped.
+    expect(result.frames.frames).toHaveLength(20);
+    expect(ffmpegCalls).toHaveLength(18);
+    const writtenFrames = JSON.parse(
+      await readFile(join(dir, 'clips', 'frames.json'), 'utf8'),
+    ) as { frames: FrameEntry[] };
+    expect(writtenFrames.frames).toEqual(keyFramesFixture());
+  });
+
+  test('fails actionably without the first-pass manifests', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-clip-keys-empty-'));
+    const { runner } = mediaRunner();
+    await expect(
+      runClipFramesKeys(runner, dir, { windows: KEY_WINDOWS }),
+    ).rejects.toThrow(/run clip-frames first/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Part 7/7 — agent self-review (critic rounds)
+// ---------------------------------------------------------------------------
+
+describe('parseCriticResponse', () => {
+  const verdicts = [
+    { id: 'clip-01', verdict: 'revise' as const, issues: ['weak hook'], patch: { start: 1.5 } },
+  ];
+
+  test('parses plain JSON and a single markdown code fence', () => {
+    expect(parseCriticResponse(JSON.stringify({ verdicts }))).toEqual({ verdicts });
+    expect(parseCriticResponse('```json\n' + JSON.stringify({ verdicts }) + '\n```')).toEqual({
+      verdicts,
+    });
+    expect(parseCriticResponse('```\n' + JSON.stringify({ verdicts }) + '\n```')).toEqual({
+      verdicts,
+    });
+  });
+
+  test('rejects garbage without coercing (actionable contract message)', () => {
+    expect(() => parseCriticResponse('not json')).toThrow(/Respond ONLY with JSON/);
+    expect(() => parseCriticResponse('{"verdicts": 3}')).toThrow(/"verdicts" array/);
+    expect(() => parseCriticResponse('{"verdicts":[{"id":""}]}')).toThrow(/non-empty string "id"/);
+    expect(() =>
+      parseCriticResponse('{"verdicts":[{"id":"clip-01","verdict":"maybe"}]}'),
+    ).toThrow(/"pass" or "revise"/);
+    expect(() =>
+      parseCriticResponse('{"verdicts":[{"id":"clip-01","verdict":"pass","patch":{"start":"x"}}]}'),
+    ).toThrow(/patch\.start .* must be a number/);
+    expect(() =>
+      parseCriticResponse(
+        '{"verdicts":[{"id":"clip-01","verdict":"pass","patch":{"social":{"title":"t"}}}]}',
+      ),
+    ).toThrow(/not a valid ClipSocial/);
+  });
+});
+
+describe('applyCriticVerdicts', () => {
+  const candidates = [
+    {
+      schemaVersion: 1 as const,
+      id: 'clip-01',
+      start: 10,
+      end: 40,
+      score: 0.8,
+      breakdown: {
+        highlight: 0.8,
+        hook: 0.5,
+        density: 0.5,
+        emotion: 0.5,
+        novelty: 0.5,
+        closure: 0.5,
+      },
+      layout: 'single' as const,
+      faces: [],
+      social: { title: 't', description: 'd', hashtags: ['h'] },
+    },
+    {
+      schemaVersion: 1 as const,
+      id: 'clip-02',
+      start: 50,
+      end: 80,
+      score: 0.6,
+      breakdown: {
+        highlight: 0.5,
+        hook: 0.5,
+        density: 0.5,
+        emotion: 0.5,
+        novelty: 0.5,
+        closure: 0.5,
+      },
+      layout: 'single' as const,
+      faces: [],
+      social: { title: 't2', description: 'd2', hashtags: ['h2'] },
+    },
+  ];
+
+  test('applies valid patches and journals the round on every verdict', () => {
+    const result = applyCriticVerdicts(
+      candidates,
+      [
+        { id: 'clip-01', verdict: 'revise', issues: ['weak hook'], patch: { start: 12 } },
+        { id: 'clip-02', verdict: 'pass' },
+      ],
+      1,
+      { durationSeconds: 100 },
+    );
+    expect(result[0]?.start).toBe(12);
+    expect(result[0]?.revisions).toEqual([
+      { round: 1, verdict: 'revise', issues: ['weak hook'], applied: true },
+    ]);
+    expect(result[1]?.revisions).toEqual([
+      { round: 1, verdict: 'pass', issues: [], applied: true },
+    ]);
+  });
+
+  test('ignores invalid patches, records them and drops discarded candidates', () => {
+    const result = applyCriticVerdicts(
+      candidates,
+      [
+        { id: 'clip-01', verdict: 'revise', patch: { end: 200 } },
+        { id: 'clip-02', verdict: 'revise', patch: { discard: true } },
+      ],
+      2,
+      { durationSeconds: 100 },
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]?.end).toBe(40);
+    expect(result[0]?.revisions?.[0]).toEqual({
+      round: 2,
+      verdict: 'revise',
+      issues: ['ignored invalid patch.end 200'],
+      applied: false,
+    });
+  });
+
+  test('never mutates its inputs and stays deterministic', () => {
+    const snapshot = JSON.parse(JSON.stringify(candidates));
+    const verdicts = [{ id: 'clip-01', verdict: 'revise' as const, patch: { start: 11 } }];
+    const first = applyCriticVerdicts(candidates, verdicts, 1);
+    const second = applyCriticVerdicts(candidates, verdicts, 1);
+    expect(first).toEqual(second);
+    expect(candidates).toEqual(snapshot);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Context budget guards (long sources)
+// ---------------------------------------------------------------------------
+
+function guardCandidate(index: number, description: string) {
+  return {
+    schemaVersion: 1 as const,
+    id: `clip-${String(index + 1).padStart(2, '0')}`,
+    start: index * 60,
+    end: index * 60 + 45,
+    score: 1 - index / 1000,
+    breakdown: {
+      highlight: 0.5,
+      hook: 0.5,
+      density: 0.5,
+      emotion: 0.5,
+      novelty: 0.5,
+      closure: 0.5,
+    },
+    layout: 'single' as const,
+    faces: [],
+    social: { title: `title ${index}`, description, hashtags: ['x'] },
+  };
+}
+
+describe('compactCandidatesForReview', () => {
+  test('sends only the best-N by score, compact and deterministic', () => {
+    const candidates = Array.from({ length: 200 }, (_, index) =>
+      guardCandidate(index, `description ${index}`.padEnd(400, '.')),
+    );
+    const compact = compactCandidatesForReview(candidates, 24);
+    expect(compact).toHaveLength(24);
+    expect(compact[0]?.id).toBe('clip-01');
+    expect(compact[23]?.id).toBe('clip-24');
+    // Compact form: no breakdown/hashtags/revisions leak into the payload.
+    expect(Object.keys(compact[0]!).sort()).toEqual(
+      ['description', 'end', 'faceCount', 'id', 'layout', 'score', 'start', 'title'].sort(),
+    );
+    expect(compact[0]?.description?.length).toBeLessThanOrEqual(160);
+    expect(compactCandidatesForReview(candidates, 24)).toEqual(compact);
+  });
+});
+
+describe('buildCriticState', () => {
+  test('NEVER exceeds the character budget for a huge candidate set', () => {
+    const candidates = Array.from({ length: 400 }, (_, index) =>
+      guardCandidate(index, `long description ${index}`.padEnd(2000, 'x')),
+    );
+    const { state, reviewedIds } = buildCriticState({
+      objective: 'virality',
+      sourceDurationSeconds: 6180,
+      candidates,
+    });
+    expect(state.length).toBeLessThanOrEqual(REVIEW_STATE_CHAR_BUDGET);
+    expect(reviewedIds.length).toBeGreaterThan(1);
+    expect(reviewedIds.length).toBeLessThanOrEqual(REVIEW_CANDIDATE_LIMIT);
+    // The ids in the state are exactly the reviewed ones (best first).
+    for (const id of reviewedIds) expect(state).toContain(`"${id}"`);
+    expect(
+      buildCriticState({ objective: 'virality', sourceDurationSeconds: 6180, candidates }).state,
+    ).toBe(state);
+  });
+
+  test('drops descriptions before dropping candidates', () => {
+    const candidates = Array.from({ length: 10 }, (_, index) =>
+      guardCandidate(index, 'short'),
+    );
+    const { state, reviewedIds } = buildCriticState({ objective: 'x', candidates });
+    expect(reviewedIds).toHaveLength(10);
+    expect(state).toContain('description');
+    // With megabyte descriptions the guard trims the list from the worst end.
+    const huge = Array.from({ length: 10 }, (_, index) =>
+      guardCandidate(index, 'x'.repeat(50_000)),
+    );
+    const capped = buildCriticState({ objective: 'x', candidates: huge });
+    expect(capped.state.length).toBeLessThanOrEqual(REVIEW_STATE_CHAR_BUDGET);
+    expect(capped.reviewedIds[capped.reviewedIds.length - 1]).toBe(
+      `clip-${String(capped.reviewedIds.length).padStart(2, '0')}`,
+    );
+  });
+});
+
+describe('truncateTranscriptSlice', () => {
+  test('caps the slice on a word boundary and marks the cut', () => {
+    const text = Array.from({ length: 500 }, (_, index) => `word${index}`).join(' ');
+    const capped = truncateTranscriptSlice(text, 100);
+    expect(capped.length).toBeLessThanOrEqual(101);
+    expect(capped.endsWith(' …')).toBe(true);
+    expect(capped.startsWith('word0 word1')).toBe(true);
+    expect(truncateTranscriptSlice('small slice', 100)).toBe('small slice');
+  });
+});
+
+describe('selectDistinctSpans', () => {
+  const spans = [
+    { id: 'a', start: 727, end: 785 },
+    { id: 'b', start: 732, end: 790 },
+    { id: 'c', start: 755, end: 812 },
+    { id: 'd', start: 1621, end: 1678 },
+    { id: 'e', start: 1630, end: 1688 },
+    { id: 'f', start: 3322, end: 3380 },
+    { id: 'g', start: 4900, end: 4958 },
+  ];
+  const spanOf = (item: (typeof spans)[number]) => ({ start: item.start, end: item.end });
+
+  test('picks the best NON-OVERLAPPING spans (no budget on one moment)', () => {
+    const picked = selectDistinctSpans(spans, spanOf, 4).map((item) => item.id);
+    // a/d/f/g are the best non-overlapping moments; b/c/e are the same zones.
+    expect(picked).toEqual(['a', 'd', 'f', 'g']);
+  });
+
+  test('backfills with skipped items when distinct spans run out', () => {
+    const picked = selectDistinctSpans(spans, spanOf, 6).map((item) => item.id);
+    expect(picked).toHaveLength(6);
+    expect(picked.slice(0, 4)).toEqual(['a', 'd', 'f', 'g']);
+    expect(picked.slice(4)).toEqual(['b', 'c']);
+  });
+
+  test('respects the limit and the min gap; empty input is empty', () => {
+    expect(selectDistinctSpans(spans, spanOf, 2).map((item) => item.id)).toEqual(['a', 'd']);
+    expect(
+      selectDistinctSpans(spans, spanOf, 4, { minGapSeconds: 60 }).map((item) => item.id),
+    ).toEqual(['a', 'd', 'f', 'g']);
+    expect(selectDistinctSpans([], spanOf, 5)).toEqual([]);
   });
 });

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-01T03:56:52.235Z",
+  "bucket": "video-maker-archive-prd",
+  "projectIds": {
+    "shared": "cw-live-1001-447742",
+    "solo": "cw-live-1001-447742-solo"
+  }
+}

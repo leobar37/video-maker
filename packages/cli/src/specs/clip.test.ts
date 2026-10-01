@@ -147,6 +147,9 @@ describe('clipAnalysisSpecs registry surface', () => {
       'frame-every',
       'shard-size',
       'context-frames',
+      'keys',
+      'key-fps',
+      'key-margin',
     ]);
     const srcArg = specByVerb(clipAnalysisSpecs, 'clip-frames').args[1];
     expect(srcArg?.name).toBe('src');
@@ -162,6 +165,7 @@ describe('clipAnalysisSpecs registry surface', () => {
       'backend',
       'max-shards',
       'jobs',
+      'timeout-ms',
       'objective',
     ]);
     expect(analyze.movesGates).toEqual(['spend']);
@@ -461,6 +465,18 @@ describe('clip-frames --src handling', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(CliFailError);
       expect((error as Error).message).toContain('--src');
+    }
+  });
+
+  test('--keys without clips/proposals.json fails actionably (run clip-propose first)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-clip-keys-no-props-'));
+    const clipFrames = specByVerb(buildClipAnalysisSpecs(makeTestDeps()), 'clip-frames');
+    try {
+      await clipFrames.run(makeTestContext({ project: dir, keys: true }, { mode: 'run' }));
+      throw new Error('clip-frames --keys ran without proposals');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CliFailError);
+      expect((error as Error).message).toContain('clip-propose');
     }
   });
 });
@@ -781,6 +797,32 @@ describe('clip-ranges run()', () => {
     expect(await pathExists(join(dir, 'clips', 'candidates.json'))).toBe(false);
   });
 
+  test('--review journals the critic round in revisions[] and stops on pass', async () => {
+    const dir = await makeDecisionProject();
+    const fake = fakeProcess(() => ({
+      code: 0,
+      stdout: JSON.stringify({ verdicts: [{ id: 'clip-01', verdict: 'pass' }] }),
+      stderr: '',
+    }));
+    const ranges = specByVerb(
+      buildClipDecisionSpecs({ ...makeTestDeps(), process: fake.runner }),
+      'clip-ranges',
+    );
+    const result = await ranges.run(
+      makeTestContext({ project: dir, min: 5, max: 10, review: true }, { mode: 'run' }),
+    );
+    expect(result.exitCode).toBe(0);
+    const raw = JSON.parse(await readFile(join(dir, 'clips', 'candidates.json'), 'utf8')) as Array<{
+      id: string;
+      revisions?: unknown[];
+    }>;
+    const first = raw.find((entry) => entry.id === 'clip-01');
+    expect(first?.revisions).toEqual([{ round: 1, verdict: 'pass', issues: [], applied: true }]);
+    const other = raw.find((entry) => entry.id !== 'clip-01');
+    expect(other?.revisions).toBeUndefined();
+    expect(fake.calls.filter((call) => call.command === 'omp')).toHaveLength(1);
+  });
+
   test('--explain prints the breakdown of one candidate and writes nothing', async () => {
     const dir = await makeDecisionProject();
     const ranges = specByVerb(buildClipDecisionSpecs(makeTestDeps()), 'clip-ranges');
@@ -1086,16 +1128,19 @@ describe('clip-viewer run()', () => {
     expect(result.exitCode).toBe(0);
     const html = await readFile(join(dir, 'clips', 'dashboard', 'index.html'), 'utf8');
     expect(html).toContain('funny moments only');
-    expect(html).toContain('<article class="card">');
+    expect(html).toContain('<article class="card" data-status=');
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
     expect(html).toContain('approved');
     expect(html).toContain('rejected');
-    // still = frame nearest the range midpoint (0–10 → 5 s → t=4, tie to lower t).
-    expect(html).toContain('clips/frames/f-000003.jpg');
-    // frame_ids spanning [12, 20] → t = 12…20 → f-000007…f-000011.
-    expect(html).toContain('f-000011');
-    expect(html).toContain('2 clips · read-only');
+    // still = frame nearest the range midpoint (0–10 → 5 s → t=4, tie to lower
+    // t), as a dashboard-relative poster path.
+    expect(html).toContain('../frames/f-000003.jpg');
+    // frame_ids span [12, 20] internally (f-000007…f-000011) but the
+    // human-facing dashboard never renders that list.
+    expect(html).not.toContain('f-000011');
+    expect(html).toContain('2 clips · 1 approved · 0 rendered · read-only');
+    expect(html).toContain('<div class="grid">');
   });
 
   test('renders candidate status when no decisions exist yet', async () => {
@@ -1430,6 +1475,7 @@ describe('clip-render run()', () => {
       fps: 30,
       durationFrames: 300,
       expectedDurationSeconds: 10,
+      loudness: { integratedLufs: -14, truePeakDbtp: -1.5, verdict: 'pass' },
     });
     expect(lines.some((line) => line.includes('clip-01'))).toBe(true);
     expect(lines.some((line) => line.includes('clip-02'))).toBe(true);

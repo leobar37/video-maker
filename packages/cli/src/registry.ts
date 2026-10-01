@@ -4,6 +4,7 @@
  * views. Adding a command = registering a spec; the runtime interprets it.
  */
 import type { CommandRegistry, CommandSpec, CommandRunContext, PlanStep } from './spec-types';
+import { groupedVerbDisplay } from './specs/studio-pairs';
 
 class Registry implements CommandRegistry {
   private readonly specs = new Map<string, CommandSpec>();
@@ -39,9 +40,11 @@ export function createRegistry(specs: readonly CommandSpec[]): CommandRegistry {
 /** Registry listing: verb, summary and declared side effects. */
 export function formatRegistryHelp(registry: CommandRegistry): string {
   const lines = ['vm — video maker production CLI (declarative registry)', '', 'Verbs:'];
-  for (const spec of registry.list()) {
-    lines.push(`  ${spec.verb.padEnd(14)} ${spec.summary}`);
-  }
+  const displays = registry.list().map((spec) => groupedVerbDisplay(spec.verb));
+  const width = Math.max(14, ...displays.map((display) => display.length));
+  registry.list().forEach((spec, index) => {
+    lines.push(`  ${displays[index]!.padEnd(width)} ${spec.summary}`);
+  });
   lines.push(
     '',
     'Flags globales: --plan | --dry-run (plan mode: sin red ni credenciales), --help.',
@@ -87,12 +90,21 @@ export function formatPlanSteps(verb: string, steps: readonly PlanStep[]): strin
  * `CommandFailure` the runtime translates into an exit code.
  */
 export class CommandFailure extends Error {
+  /**
+   * When `reported` is true the failure already printed its stable output
+   * (e.g. the studio --json envelope); the runtime must NOT print another
+   * line over it. Legacy failures leave it false and print as always.
+   */
+  readonly reported: boolean;
+
   constructor(
     message: string,
     public readonly exitCode: number,
+    options: { reported?: boolean } = {},
   ) {
     super(message);
     this.name = 'CommandFailure';
+    this.reported = options.reported ?? false;
   }
 }
 

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "bucket": "video-maker-archive-prd",
+  "capBytes": 10485760,
+  "runs": [
+    {
+      "at": "2026-10-01T03:56:54.052Z",
+      "status": "committed",
+      "reservedBytes": 9834997,
+      "attemptedPutBytes": 7281485,
+      "exitCode": 0
+    },
+    {
+      "at": "2026-10-01T04:29:41.735Z",
+      "status": "committed",
+      "reservedBytes": 8288,
+      "attemptedPutBytes": 96,
+      "exitCode": 0
+    }
+  ]
+}

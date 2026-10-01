@@ -28,6 +28,18 @@ export {
   RemoteUnverifiableError,
 } from './storage/r2-store';
 export type { CoherenceCheck, R2StoreOptions, S3Like } from './storage/r2-store';
+export { bodyToBytes } from './storage/r2-store';
+
+// Studio backup port adapter (P-004): private-bucket StudioStorage over R2
+export {
+  createPrivateStudioR2Storage,
+  STUDIO_PRIVATE_BUCKET_ENV_NAME,
+  studioPrivateBucketOf,
+  StudioPrivateBucketMissingError,
+  StudioR2Storage,
+  StudioStorageConflictError,
+} from './storage/studio-r2';
+export type { PrivateStudioR2StorageOptions, StudioR2StorageOptions } from './storage/studio-r2';
 
 export { describeStoragePlan } from './storage/plan';
 export type { AdapterPlanReport } from './storage/plan';

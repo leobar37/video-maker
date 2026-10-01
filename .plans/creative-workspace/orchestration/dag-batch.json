@@ -1,0 +1,97 @@
+{
+  "operations": [
+    {
+      "op": "initiative.create",
+      "input": {
+        "name": "creative-workspace",
+        "desc": "Taller agente-first, CLI/assets abiertos, R2 y dashboard único; .plans/creative-workspace/goal.md y contracts.md normativo."
+      }
+    },
+    {
+      "op": "gate.create",
+      "input": {
+        "id": "G-cw-implement",
+        "initiative": "creative-workspace",
+        "title": "Autorización de implementar el plan creativo",
+        "body": "Preparar el plan no autoriza código. Operador aprueba seis fases/contrato y pruebas locales (servidor efímero local incluido), sin R2 live, publicación, IA pagada, exposición duradera ni infraestructura. Agentes nunca resuelven este gate.",
+        "purpose": "approval"
+      }
+    },
+    {
+      "op": "gate.create",
+      "input": {
+        "id": "G-cw-live-r2",
+        "initiative": "creative-workspace",
+        "title": "Autorización de prueba R2 privada acotada",
+        "body": "Operador autoriza exclusivamente requests/uploads del fixture <=20MiB en bucket privado existente con namespace único para remote-only restore y hashes. Sin delete, bucket nuevo, objetos públicos, IA ni publicación. Registrar bytes/keys y evidencia redactada; ninguna autorización heredada de otros planes.",
+        "purpose": "approval"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CW-001",
+        "initiative": "creative-workspace",
+        "title": "P-001 Dominio, schemas y contrato portable",
+        "body": "Leer .plans/creative-workspace/contracts.md y .plans/creative-workspace/phases/01-studio-domain-contracts.md completos. Modelo obligatorio zai/glm-5.3:high. Taller abierto: no template/renderer obligatorio, proyecto no encerrado por cliente, snapshot de outputs producidos directamente, restore sin generar; preservar CLI legacy y ownership. No aceptar propia task ni resolver gates. Cumplir presupuesto/no-goals del goal. ",
+        "acceptance": "Schemas v1 y tipos públicos validan assets abiertos/multimarca y manifests portables; suite studio de schemas y build pasan con exit 0.\nbun test packages/schemas/src/studio.test.ts && bun run build",
+        "blocked_by": "G-cw-implement"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CW-002",
+        "initiative": "creative-workspace",
+        "title": "P-002 Assets abiertos y revisiones locales recuperables",
+        "body": "Leer .plans/creative-workspace/contracts.md y .plans/creative-workspace/phases/02-open-assets-local-revisions.md completos. Modelo obligatorio zai/glm-5.3:high. Taller abierto: no template/renderer obligatorio, proyecto no encerrado por cliente, snapshot de outputs producidos directamente, restore sin generar; preservar CLI legacy y ownership. No aceptar propia task ni resolver gates. Cumplir presupuesto/no-goals del goal. ",
+        "acceptance": "Snapshot/restore conserva outputs y fuentes/presets por SHA sin renderizar; suites workspace/snapshot pasan con exit 0.\nbun test packages/studio/src/workspace.test.ts packages/studio/src/snapshot.test.ts && bun run build",
+        "blocked_by": "T-CW-001"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CW-003",
+        "initiative": "creative-workspace",
+        "title": "P-003 CLI declarativa y recipe explícita opcional",
+        "body": "Leer .plans/creative-workspace/contracts.md y .plans/creative-workspace/phases/03-cli-open-workspace-commands.md completos. Modelo obligatorio zai/glm-5.3-flash:high. Taller abierto: no template/renderer obligatorio, proyecto no encerrado por cliente, snapshot de outputs producidos directamente, restore sin generar; preservar CLI legacy y ownership. No aceptar propia task ni resolver gates. Cumplir presupuesto/no-goals del goal. ",
+        "acceptance": "CLI por grupos consume API local, JSON y dry-run correctos; tests de nuevas specs y runtime legacy pasan con exit 0.\nbun test packages/cli/src/specs/studio.test.ts packages/cli/src/runtime.test.ts packages/cli/src/args.test.ts && bun run build",
+        "blocked_by": "T-CW-002"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CW-004",
+        "initiative": "creative-workspace",
+        "title": "P-004 R2 completo, commit inmutable y recuperación remota",
+        "body": "Leer .plans/creative-workspace/contracts.md y .plans/creative-workspace/phases/04-r2-manifest-sync-recovery.md completos. Modelo obligatorio zai/glm-5.3:high. Taller abierto: no template/renderer obligatorio, proyecto no encerrado por cliente, snapshot de outputs producidos directamente, restore sin generar; preservar CLI legacy y ownership. No aceptar propia task ni resolver gates. Cumplir presupuesto/no-goals del goal. No requests live hasta G-cw-live-r2 resuelto por operador; no fake como evidencia de R2 real.",
+        "acceptance": "Fake storage demuestra sync idempotente, fallos sin confirmed y recover remote-only; tests sync/adapter pasan con exit 0.\nbun test packages/studio/src/sync.test.ts packages/providers/src/storage/studio-r2.test.ts && bun run build",
+        "blocked_by": "T-CW-003"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CW-005",
+        "initiative": "creative-workspace",
+        "title": "P-005 Un dashboard read-only por catálogo y URLs",
+        "body": "Leer .plans/creative-workspace/contracts.md y .plans/creative-workspace/phases/05-one-catalog-dashboard.md completos. Modelo obligatorio zai/glm-5.3-flash:high. Taller abierto: no template/renderer obligatorio, proyecto no encerrado por cliente, snapshot de outputs producidos directamente, restore sin generar; preservar CLI legacy y ownership. No aceptar propia task ni resolver gates. Cumplir presupuesto/no-goals del goal. ",
+        "acceptance": "Una aplicación muestra catálogo imagen/SVG/video, diff y descargas seguras; tests HTTP/catalog pasan con exit 0.\nbun test packages/dashboard/src/server.test.ts packages/dashboard/src/catalog.test.ts && bun run build",
+        "blocked_by": "T-CW-003,T-CW-004"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CW-006",
+        "initiative": "creative-workspace",
+        "title": "P-006 Adopción no destructiva y prueba end-to-end real",
+        "body": "Leer .plans/creative-workspace/contracts.md y .plans/creative-workspace/phases/06-adoption-end-to-end-verification.md completos. Modelo obligatorio zai/glm-5.3:high. Taller abierto: no template/renderer obligatorio, proyecto no encerrado por cliente, snapshot de outputs producidos directamente, restore sin generar; preservar CLI legacy y ownership. No aceptar propia task ni resolver gates. Cumplir presupuesto/no-goals del goal. No requests live hasta G-cw-live-r2 resuelto por operador; no fake como evidencia de R2 real.",
+        "acceptance": "Verificadores offline/live y build pasan con exit 0, restore remoto conserva SHA de dos revisiones imagen/video y capturas de dashboard están registradas.\nbun run studio:verify && bun run studio:verify:r2 && bun run build",
+        "blocked_by": "T-CW-005,G-cw-live-r2"
+      }
+    }
+  ]
+}

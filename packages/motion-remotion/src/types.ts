@@ -73,6 +73,13 @@ export interface FilmScene {
     bbox: [number, number, number, number];
     presence?: number;
   }>;
+  /**
+   * Burned-in subtitle segments for clip intents, in SECONDS relative to the
+   * scene start: whisper `word_timestamps` clipped to the clip window and
+   * packed into phrases (`subtitle-words`). Consumed by `clip-vertical` /
+   * `clip-podcast` so the copy always follows the real speech timing.
+   */
+  subtitleSegments?: ReadonlyArray<{ text: string; start: number; end: number }>;
 }
 
 /** Scenes consume the film's brand tokens (warm canvas, accent, fonts). */

@@ -106,7 +106,7 @@ export function isNotFoundError(err: unknown): boolean {
   return false;
 }
 
-async function bodyToBytes(body: unknown): Promise<Uint8Array> {
+export async function bodyToBytes(body: unknown): Promise<Uint8Array> {
   if (!body) return new Uint8Array(0);
   if (body instanceof Uint8Array) return body;
   const candidate = body as { transformToByteArray?: () => Promise<Uint8Array> };

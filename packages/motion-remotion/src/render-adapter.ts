@@ -54,6 +54,24 @@ export interface RenderFilmVideoOptions extends FilmCompositionOptions {
   outputLocation: string;
   concurrency?: number | null;
   /**
+   * Per-frame `delayRender` budget (Remotion defaults to 30s). The clip
+   * layouts decode several video layers per frame; the default aborts
+   * mid-render and restarts the whole job, which dominated wall time.
+   */
+  timeoutInMilliseconds?: number;
+  /**
+   * Frame transfer format. Remotion defaults to lossless `png`, which is slow
+   * to encode for 1080x1920 frames; `jpeg` is markedly faster and the frames
+   * are re-encoded to h264 right after.
+   */
+  imageFormat?: 'png' | 'jpeg';
+  jpegQuality?: number;
+  /**
+   * `OffthreadVideo` decode cache. A clip reuses ONE source file across every
+   * frame, so a larger cache avoids re-decoding the same content.
+   */
+  offthreadVideoCacheSizeInBytes?: number;
+  /**
    * Optional post-render loudness stage. The `enabled` flag is the gate:
    * omitted or false = the render is returned untouched.
    */
@@ -66,6 +84,8 @@ export interface RenderFilmStillOptions extends FilmCompositionOptions {
   output: string;
   /** Absolute composition frame to sample. */
   frame: number;
+  /** Same `delayRender` budget as the video path (Remotion default is 30s). */
+  timeoutInMilliseconds?: number;
 }
 
 export interface FilmRenderResult {
@@ -128,10 +148,13 @@ export async function renderFilmVideo(
     serveUrl,
     codec: 'h264',
     pixelFormat: 'yuv420p',
-    imageFormat: 'png',
     outputLocation: options.outputLocation,
     inputProps: options.inputProps,
     concurrency: options.concurrency ?? null,
+    timeoutInMilliseconds: options.timeoutInMilliseconds,
+    imageFormat: options.imageFormat ?? 'png',
+    jpegQuality: options.jpegQuality,
+    offthreadVideoCacheSizeInBytes: options.offthreadVideoCacheSizeInBytes,
     onProgress: options.onRenderProgress
       ? ({ progress }) => options.onRenderProgress?.(progress)
       : undefined,
@@ -160,6 +183,7 @@ export async function renderFilmStill(
     output: options.output,
     frame: options.frame,
     inputProps: options.inputProps,
+    timeoutInMilliseconds: options.timeoutInMilliseconds,
   });
   return { serveUrl, composition, output: options.output };
 }

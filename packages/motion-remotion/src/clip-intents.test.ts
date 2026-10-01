@@ -17,8 +17,15 @@ import {
   type TimingInput,
 } from '@videomaker/motion-core';
 
-import { activeSpeakerId, halfCropWindow } from './ClipPodcast';
-import { clampCropWindow, coverCropWindow, type CropWindow } from './ClipVertical';
+import { activeSpeakerId, halfCropLayout } from './ClipPodcast';
+import {
+  activeSubtitleSegmentAt,
+  clampCropWindow,
+  nativeCropLayout,
+  sceneSubtitleSegments,
+  VERTICAL_SAFE_ZONES,
+  type CropWindow,
+} from './ClipVertical';
 import { registerClipIntents } from './clip-intents';
 import { getSceneRenderer, registeredSceneIntents, unregisterScene } from './SceneRenderer';
 import type { FilmScene } from './types';
@@ -181,26 +188,64 @@ describe('clampCropWindow', () => {
   });
 });
 
-describe('coverCropWindow', () => {
+describe('nativeCropLayout (zoom prohibited)', () => {
   const source = { width: 1920, height: 1080 };
   const canvas = { width: 1080, height: 1920 };
 
-  test('a static plan is a centre crop (canvas aspect, source middle)', () => {
-    const crop = coverCropWindow(source, canvas, source.width / 2);
-    expect(crop.height).toBe(1080);
-    expect(crop.width).toBeCloseTo(1080 * (canvas.width / canvas.height));
-    expect(crop.x).toBeCloseTo((source.width - crop.width) / 2);
-    expect(crop.y).toBe(0);
-    expect(crop.width / crop.height).toBeCloseTo(canvas.width / canvas.height);
+  test('the scale NEVER exceeds 1.0 (property cases)', () => {
+    const sources = [
+      { width: 1920, height: 1080 },
+      { width: 1280, height: 720 },
+      { width: 640, height: 360 },
+      { width: 1080, height: 1920 },
+      { width: 400, height: 3000 },
+    ];
+    for (const candidate of sources) {
+      for (const focusX of [-5000, 0, candidate.width / 2, candidate.width, 5000, Number.NaN]) {
+        const layout = nativeCropLayout(candidate, canvas, focusX);
+        expect(layout.scale).toBeLessThanOrEqual(1);
+        expect(layout.scale).toBe(1);
+        expect(layout.crop.width).toBeLessThanOrEqual(Math.min(candidate.width, canvas.width));
+        expect(layout.crop.height).toBeLessThanOrEqual(Math.min(candidate.height, canvas.height));
+        expect(layout.box.width).toBe(layout.crop.width);
+        expect(layout.box.height).toBe(layout.crop.height);
+        expect(layout.position.x).toBeGreaterThanOrEqual(0);
+        expect(layout.position.y).toBeGreaterThanOrEqual(0);
+        expect(layout.position.x + layout.box.width).toBeLessThanOrEqual(canvas.width);
+        expect(layout.position.y + layout.box.height).toBeLessThanOrEqual(canvas.height);
+      }
+    }
   });
 
-  test('edge focus points never expose frame edges', () => {
+  test('a 1080p source lands as a 1080x1080 native window centred on the canvas', () => {
+    const layout = nativeCropLayout(source, canvas, source.width / 2);
+    expect(layout.crop).toEqual({ x: 420, y: 0, width: 1080, height: 1080 });
+    expect(layout.position).toEqual({ x: 0, y: 420 });
+    expect(layout.scale).toBe(1);
+  });
+
+  test('the window follows x(t) but never exposes frame edges', () => {
     for (const focusX of [-5000, 0, 1920, 5000, Number.NaN]) {
-      const crop = coverCropWindow(source, canvas, focusX);
+      const { crop } = nativeCropLayout(source, canvas, focusX);
       expect(crop.x).toBeGreaterThanOrEqual(0);
       expect(crop.x + crop.width).toBeLessThanOrEqual(source.width);
       expect(crop.y + crop.height).toBeLessThanOrEqual(source.height);
     }
+    expect(nativeCropLayout(source, canvas, 400).crop.x).toBe(0);
+    expect(nativeCropLayout(source, canvas, 1520).crop.x).toBe(840);
+  });
+
+  test('a source smaller than the canvas is shown 1:1 — never upscaled', () => {
+    const layout = nativeCropLayout({ width: 640, height: 360 }, canvas, 320);
+    expect(layout.scale).toBe(1);
+    expect(layout.crop).toEqual({ x: 0, y: 0, width: 640, height: 360 });
+    expect(layout.position).toEqual({ x: 220, y: 780 });
+  });
+
+  test('a canvas without positive dimensions throws', () => {
+    expect(() =>
+      nativeCropLayout(source, { width: 0, height: 1920 }, 50),
+    ).toThrow('nativeCropLayout');
   });
 });
 
@@ -239,59 +284,101 @@ describe('activeSpeakerId', () => {
   });
 });
 
-describe('halfCropWindow', () => {
+describe('halfCropLayout (zoom prohibited)', () => {
   const half = { width: 1080, height: 960 };
+  const source = { width: 1920, height: 1080 };
 
-  test('maps a normalized face box to source pixels and keeps the half aspect', () => {
-    const crop = halfCropWindow([250, 250, 500, 500], { width: 2000, height: 1000 }, half);
-    // Face box [500, 250, 1000, 500] px, centred on (1000, 500).
-    expect(crop.width / crop.height).toBeCloseTo(half.width / half.height);
-    expect(crop.x + crop.width / 2).toBeCloseTo(1000);
-    expect(crop.y + crop.height / 2).toBeCloseTo(500);
-    expect(crop.x).toBeGreaterThanOrEqual(0);
-    expect(crop.y).toBeGreaterThanOrEqual(0);
-    expect(crop.x + crop.width).toBeLessThanOrEqual(2000);
-    expect(crop.y + crop.height).toBeLessThanOrEqual(1000);
+  test('the scale NEVER exceeds 1.0 and the window fits source and half', () => {
+    const boxes: Array<[number, number, number, number]> = [
+      [250, 250, 500, 500],
+      [0, 0, 100, 100],
+      [900, 800, 100, 150],
+    ];
+    for (const bbox of boxes) {
+      for (const focus of [undefined, { x: 960, y: 540 }, { x: -100, y: 5000 }]) {
+        const layout = halfCropLayout(bbox, source, half, 960, focus);
+        expect(layout.scale).toBeLessThanOrEqual(1);
+        expect(layout.scale).toBe(1);
+        expect(layout.crop.width).toBeLessThanOrEqual(
+          Math.min(Math.round(half.width * 0.75), source.width),
+        );
+        expect(layout.crop.height).toBeLessThanOrEqual(
+          Math.min(Math.round(half.height * 0.62), source.height),
+        );
+        expect(layout.crop.x).toBeGreaterThanOrEqual(0);
+        expect(layout.crop.y).toBeGreaterThanOrEqual(0);
+        expect(layout.crop.x + layout.crop.width).toBeLessThanOrEqual(source.width);
+        expect(layout.crop.y + layout.crop.height).toBeLessThanOrEqual(source.height);
+      }
+    }
   });
 
-  test('an edge face is clamped inside the source frame', () => {
-    const crop = halfCropWindow([0, 0, 500, 500], { width: 1920, height: 1080 }, half);
-    expect(crop.x).toBe(0);
-    expect(crop.y).toBe(0);
-    expect(crop.width / crop.height).toBeCloseTo(half.width / half.height);
-    expect(crop.x + crop.width).toBeLessThanOrEqual(1920);
+  test('the estimated head sits at the upper anchor of its window (subs stay clear)', () => {
+    const layout = halfCropLayout([250, 250, 500, 500], source, half, 0);
+    expect(layout.crop.height).toBe(Math.round(960 * 0.62));
+    expect(layout.crop.width).toBe(Math.round(1080 * 0.75));
+    // Head centre estimate = box top + min(half box, 11% of source height).
+    const headCenterY = 270 + Math.min(270, 1080 * 0.11);
+    expect(headCenterY - layout.crop.y).toBeCloseTo(0.32 * layout.crop.height, 0);
+    expect(layout.position).toEqual({ x: 135, y: 24 });
+    expect(layout.position.y + layout.box.height).toBeLessThan(half.height);
+    // The bottom half's window bottom stays above the subtitle safe band.
+    const bottom = halfCropLayout([250, 250, 500, 500], source, half, 960);
+    expect(bottom.position.y + bottom.box.height).toBeLessThanOrEqual(
+      1920 - VERTICAL_SAFE_ZONES.bottom - 120,
+    );
   });
 
-  test('the smoothed camera focus overrides the static face centre', () => {
-    const crop = halfCropWindow([400, 400, 200, 200], { width: 2000, height: 2000 }, half, {
-      x: 900,
-      y: 1000,
-    });
-    expect(crop.x + crop.width / 2).toBeCloseTo(900);
-    expect(crop.y + crop.height / 2).toBeCloseTo(1000);
-    // A focus near an edge slides the window inside the frame instead.
-    const clamped = halfCropWindow([400, 400, 200, 200], { width: 2000, height: 2000 }, half, {
-      x: 0,
-      y: 0,
-    });
-    expect(clamped.x).toBe(0);
-    expect(clamped.y).toBe(0);
-    expect(clamped.x + clamped.width).toBeLessThanOrEqual(2000);
-    expect(clamped.y + clamped.height).toBeLessThanOrEqual(2000);
+  test('PERSON boxes keep the head in frame (regression: torso/legs crops)', () => {
+    // The clip-01 bug: the model returned full-body boxes ([110,115,260,875])
+    // and the old face-centre anchor cut every head off the window.
+    const layout = halfCropLayout([110, 115, 260, 875], source, half, 0);
+    const headTopPx = (115 / 1000) * 1080;
+    // The head band (box top) must land INSIDE the window, near the top.
+    expect(layout.crop.y).toBeLessThanOrEqual(headTopPx);
+    expect(headTopPx - layout.crop.y).toBeLessThan(0.25 * layout.crop.height);
+    // And the window never drops below the legs-free upper body (no feet).
+    expect(layout.crop.y).toBeGreaterThanOrEqual(0);
   });
 
-  test('tiny faces keep a context-sized crop around their centre', () => {
-    const crop = halfCropWindow([450, 450, 20, 20], { width: 2000, height: 1000 }, half);
-    // Face is 20px tall (box [900, 450, 40, 20] px); the crop floor is 25%
-    // of the source height.
-    expect(crop.height).toBeCloseTo(250);
-    expect(crop.x + crop.width / 2).toBeCloseTo(920);
-    expect(crop.y + crop.height / 2).toBeCloseTo(460);
+  test('the camera focus slides the window without exposing edges', () => {
+    const layout = halfCropLayout([400, 400, 200, 200], source, half, 960, { x: 0, y: 0 });
+    expect(layout.crop.x).toBe(0);
+    expect(layout.crop.x + layout.crop.width).toBeLessThanOrEqual(1920);
+    expect(layout.crop.y + layout.crop.height).toBeLessThanOrEqual(1080);
   });
 
   test('a degenerate half size throws', () => {
     expect(() =>
-      halfCropWindow([0, 0, 100, 100], { width: 1000, height: 1000 }, { width: 0, height: 960 }),
-    ).toThrow('halfCropWindow');
+      halfCropLayout([0, 0, 100, 100], { width: 1000, height: 1000 }, { width: 0, height: 960 }, 0),
+    ).toThrow('halfCropLayout');
+  });
+});
+
+describe('subtitles from whisper word timings', () => {
+  const segments = [
+    { text: 'hola', start: 0.5, end: 1.5 },
+    { text: 'mundo', start: 1.5, end: 2.5 },
+  ];
+
+  test('activeSubtitleSegmentAt picks the half-open segment on screen', () => {
+    expect(activeSubtitleSegmentAt(segments, 0.4)).toBeNull();
+    expect(activeSubtitleSegmentAt(segments, 0.5)?.text).toBe('hola');
+    expect(activeSubtitleSegmentAt(segments, 1.5)?.text).toBe('mundo');
+    expect(activeSubtitleSegmentAt(segments, 2.5)).toBeNull();
+    expect(activeSubtitleSegmentAt([], 1)).toBeNull();
+  });
+
+  test('scene segments win over the narration fallback (no clip is ever silent)', () => {
+    const withWords: FilmScene = {
+      ...CLIP_SINGLE,
+      subtitleSegments: segments,
+      narration: 'otro texto',
+    };
+    expect(sceneSubtitleSegments(withWords, 90, 30)).toEqual(segments);
+    const fallback = sceneSubtitleSegments({ ...CLIP_SINGLE, narration: 'una frase' }, 90, 30);
+    expect(fallback).toHaveLength(1);
+    expect(fallback[0]?.text).toBe('una frase');
+    expect(sceneSubtitleSegments({ ...CLIP_SINGLE }, 90, 30)).toEqual([]);
   });
 });

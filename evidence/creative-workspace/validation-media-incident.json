@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "goal": "G-001",
+  "visual": {
+    "status": "PENDING"
+  },
+  "offline": {
+    "ranAt": "2026-10-01T03:56:38.665Z",
+    "exitCode": 0,
+    "command": "bun run studio:verify",
+    "fixtureBytes": 9745720,
+    "suites": {
+      "required": 17,
+      "filesRan": 17,
+      "totalTests": 269,
+      "passed": 269,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "adoption": {
+      "projectIds": {
+        "shared": "shared-showcase",
+        "solo": "solo-workshop"
+      },
+      "revisions": [
+        {
+          "projectId": "shared-showcase",
+          "assetId": "bfc-cover",
+          "revisionId": "d004",
+          "rootHash": "b5b087ff87cf11918ab12e499317ccb28eb5f7c1107eb421795e5011dcfac1e2",
+          "files": 6
+        },
+        {
+          "projectId": "shared-showcase",
+          "assetId": "bfc-cover",
+          "revisionId": "d005",
+          "rootHash": "45a26c30ae1e93bf273ec6745da6078e399975d0234c0715b15397265711f8fd",
+          "files": 6
+        },
+        {
+          "projectId": "solo-workshop",
+          "assetId": "hello-video",
+          "revisionId": "d006",
+          "rootHash": "3ae539abad24665c6e37e96389ba32b700b78cddfcf049faab75c332dc13db9e",
+          "files": 12
+        },
+        {
+          "projectId": "solo-workshop",
+          "assetId": "hello-video",
+          "revisionId": "d007",
+          "rootHash": "984e152ec7a699a44b64438ecbf6d16b2220c9b2b529febb0490b5618bf9f681",
+          "files": 12
+        }
+      ],
+      "restoreChecks": [
+        {
+          "revisionId": "d004",
+          "filesOk": true,
+          "files": 6
+        },
+        {
+          "revisionId": "d006",
+          "filesOk": true,
+          "files": 12
+        }
+      ],
+      "cliExitCodes": [
+        {
+          "args": "project list --workspace /tmp/cw-verify-LTB1YW/workspace --json",
+          "exitCode": 0
+        },
+        {
+          "args": "asset inspect bfc-cover --project shared-showcase --workspace /tmp/cw-verify-LTB1YW/workspace --json",
+          "exitCode": 0
+        },
+        {
+          "args": "asset history hello-video --project solo-workshop --workspace /tmp/cw-verify-LTB1YW/workspace --json",
+          "exitCode": 0
+        },
+        {
+          "args": "preset list --workspace /tmp/cw-verify-LTB1YW/workspace --json",
+          "exitCode": 0
+        }
+      ]
+    },
+    "dashboardSmoke": {
+      "healthOk": true,
+      "catalogOk": true,
+      "assetApiOk": true,
+      "imageServedSha": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+      "imageShaMatches": true,
+      "videoContentType": "video/mp4",
+      "videoServed": true,
+      "cspPresent": true,
+      "port": 45159,
+      "stopped": true,
+      "url": "http://127.0.0.1:45159 (efímero, detenido)"
+    },
+    "failures": [],
+    "notes": []
+  },
+  "live": {
+    "ranAt": "2026-10-01T03:40:03.859Z",
+    "exitCode": 0,
+    "command": "bun run studio:verify:r2",
+    "gate": "G-cw-live-r2 (resolved/approved)",
+    "bucket": "video-maker-media-prd",
+    "projectIds": [
+      "cw-live-demo",
+      "cw-live-demo-solo"
+    ],
+    "receipts": [
+      {
+        "revisionId": "d004",
+        "status": "confirmed",
+        "rootHash": "a12c7aeb35c4b4159fba02a4182388ac6320788c35900cb0b4662ddc802a52d7",
+        "manifestKey": "studio/v1/projects/cw-live-demo/assets/bfc-cover/revisions/d004/manifest.json"
+      },
+      {
+        "revisionId": "d005",
+        "status": "confirmed",
+        "rootHash": "fb33e731c36acae2e2f4c2bfa11d09e1db65345c223055124c15ce3317ab43f5",
+        "manifestKey": "studio/v1/projects/cw-live-demo/assets/bfc-cover/revisions/d005/manifest.json"
+      },
+      {
+        "revisionId": "d006",
+        "status": "confirmed",
+        "rootHash": "7ad23c2303bab3c6bff5b8949ac899840ff7295a730550f16018dc9c9bcbd98b",
+        "manifestKey": "studio/v1/projects/cw-live-demo-solo/assets/hello-video/revisions/d006/manifest.json"
+      },
+      {
+        "revisionId": "d007",
+        "status": "confirmed",
+        "rootHash": "c5b90f09061ec7700ba936e91e26a86c2575f762358d52f0a7b8a28b35b0950b",
+        "manifestKey": "studio/v1/projects/cw-live-demo-solo/assets/hello-video/revisions/d007/manifest.json"
+      }
+    ],
+    "deepVerify": {
+      "shared": 2,
+      "solo": 2,
+      "failures": []
+    },
+    "conditionalPutProof": {
+      "key": "objects/55/556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+      "sameBytesIdempotent": true,
+      "differentBytesRejected": true,
+      "objectUnchanged": true
+    },
+    "recoveredRevisions": [
+      {
+        "projectId": "cw-live-demo",
+        "assetId": "bfc-cover",
+        "revisionId": "d004",
+        "rootHash": "a12c7aeb35c4b4159fba02a4182388ac6320788c35900cb0b4662ddc802a52d7",
+        "manifestKey": "studio/v1/projects/cw-live-demo/assets/bfc-cover/revisions/d004/manifest.json",
+        "manifestBytesEqual": true,
+        "filesChecked": 6,
+        "filesShaOk": 6
+      },
+      {
+        "projectId": "cw-live-demo",
+        "assetId": "bfc-cover",
+        "revisionId": "d005",
+        "rootHash": "fb33e731c36acae2e2f4c2bfa11d09e1db65345c223055124c15ce3317ab43f5",
+        "manifestKey": "studio/v1/projects/cw-live-demo/assets/bfc-cover/revisions/d005/manifest.json",
+        "manifestBytesEqual": true,
+        "filesChecked": 6,
+        "filesShaOk": 6
+      },
+      {
+        "projectId": "cw-live-demo-solo",
+        "assetId": "hello-video",
+        "revisionId": "d006",
+        "rootHash": "7ad23c2303bab3c6bff5b8949ac899840ff7295a730550f16018dc9c9bcbd98b",
+        "manifestKey": "studio/v1/projects/cw-live-demo-solo/assets/hello-video/revisions/d006/manifest.json",
+        "manifestBytesEqual": true,
+        "filesChecked": 12,
+        "filesShaOk": 12
+      },
+      {
+        "projectId": "cw-live-demo-solo",
+        "assetId": "hello-video",
+        "revisionId": "d007",
+        "rootHash": "c5b90f09061ec7700ba936e91e26a86c2575f762358d52f0a7b8a28b35b0950b",
+        "manifestKey": "studio/v1/projects/cw-live-demo-solo/assets/hello-video/revisions/d007/manifest.json",
+        "manifestBytesEqual": true,
+        "filesChecked": 12,
+        "filesShaOk": 12
+      }
+    ],
+    "activeShaProofs": {
+      "coverFeed": "b8b78e43b6df18b0f0c587b7b5975c5321b6597b09e56906cdf10e1d3baf1fb6",
+      "videoMp4": "3efc7565dd09d3f1bc82c8f1baef34b3426c9c61cc64ef72493e5e0c3ed3ce39",
+      "remotionLock": "94ac08a91c2dc6aec7d8ff9a401a09b20c230227f49f6735c77ac51b200cfc56"
+    },
+    "catalogRebuild": {
+      "shared": 2,
+      "solo": 2
+    },
+    "metrics": {
+      "head": 141,
+      "get": 93,
+      "list": 8,
+      "put": 2,
+      "putPayloadBytes": 1280662,
+      "durationMs": 81456,
+      "maxAttempts": 1,
+      "namespaceBytes": 9766673,
+      "objectCount": 30
+    },
+    "inventoryPath": "evidence/creative-workspace/live-inventory.json",
+    "inventoryComparison": {
+      "priorInventory": false
+    },
+    "failures": [],
+    "bucketAuthorizationIncident": {
+      "detectedAt": "2026-10-01T03:42:48.401411+00:00",
+      "summary": "Probe real escribió en video-maker-media-prd; gate G-cw-live-r2 autoriza EXCLUSIVAMENTE video-maker-archive-prd (privado). Detenido por orden del operador.",
+      "cause": ".env R2_BUNDLES_BUCKET_NAME=video-maker-media-prd: createPrivateStudioR2Storage usa fielmente env.bundlesBucket (studioPrivateBucketOf); el nombre del env apunta al bucket de media. El script original no exigía el nombre exacto del bucket autorizado.",
+      "gateAuthorization": "G-cw-live-r2 resolved/approved: \"requests/uploads del fixture <=20MiB en bucket privado existente con namespace único... exclusivamente bucket privado y sin delete\". Handoff del operador: PRIVATE video-maker-archive-prd only.",
+      "actualWrites": {
+        "bucket": "video-maker-media-prd",
+        "keys": 30,
+        "bytes": 9766673,
+        "keyPrefixes": [
+          "studio/v1/projects/cw-live-demo/",
+          "studio/v1/projects/cw-live-demo-solo/",
+          "objects/"
+        ],
+        "deletesPerformed": false,
+        "publicUrlsCreated": false,
+        "publicity": "No se cambió ninguna configuración de acceso del bucket; la exposición depende de la config preexistente del bucket. Los objetos se subieron con Metadata sha256, ContentType y IfNoneMatch:*."
+      },
+      "actions": [
+        "STOP inmediato de writes R2 (orden operador).",
+        "Sin delete/migrate/public ni edición de .env.",
+        "Guard duro añadido en scripts/studio-verify-r2.ts: exige bucket === video-maker-archive-prd ANTES de cualquier llamada de storage; si no coincide, exit 1 con blocker y CERO escrituras.",
+        "Evidencia preservada con el bucket REAL usado; no se renombró el bucket registrado."
+      ],
+      "status": "blocked-esperando-coordinador (no rerun live sin nueva instrucción)"
+    },
+    "note": "exitCode 0 es el resultado REAL de las corridas; el incidente de autorización de bucket está en bucketAuthorizationIncident y el guard duro ya bloquea corridas futuras contra un bucket no autorizado.",
+    "status": "blocked-invalid_private_probe",
+    "acceptedAsPrivateProof": false,
+    "exitCodeNote": "exitCode 0 es el resultado REAL de proceso de las corridas; NO es prueba de probe privado: el bucket usado no era el autorizado. Ver bucketAuthorizationIncident.",
+    "ledgerAllLiveRuns": {
+      "bucket": "video-maker-media-prd",
+      "envMappingWhy": "packages/credentials resuelve bundlesBucket desde .env R2_BUNDLES_BUCKET_NAME, cuyo valor en este repo es video-maker-media-prd; createPrivateStudioR2Storage/studioPrivateBucketOf usan ese nombre fielmente. La autorizacion del gate nombra video-maker-archive-prd; el script (hasta el incidente) no exigia el nombre exacto.",
+      "runs": [
+        {
+          "run": 1,
+          "startedApprox": "2026-10-01T03:2xZ",
+          "wallSeconds": 120.26,
+          "outcome": "exit 1 (aserciones de catalogo)",
+          "networkEffects": "PRIMER upload completo: 30 keys nuevas (4 manifests + 2 checkpoints + 24 objetos) = 9.766.673 bytes escritos; ademas 2 intentos condicionales PUT sobre key existente (640.331 bytes ofrecidos c/u: mismos-bytes idempotente, tampered rechazado 412); deep verify GET+SHA de todos los objetos; recovery remote-only (GETs)."
+        },
+        {
+          "run": 2,
+          "wallSeconds": 83.02,
+          "durationMs": 82859,
+          "outcome": "exit 0",
+          "networkEffects": "0 keys nuevas (dedupe via HEAD); 2 intentos condicionales PUT (1.280.662 bytes ofrecidos, 0 escritos: uno idempotente, uno rechazado); verify deep + recovery GETs."
+        },
+        {
+          "run": 3,
+          "wallSeconds": 81.61,
+          "durationMs": 81456,
+          "outcome": "exit 0",
+          "networkEffects": "identico al run 2; metrics: head=141 get=93 list=8 put=2 putPayloadBytes=1.280.662 objectCount=30 (estable)."
+        }
+      ],
+      "totals": {
+        "bytesActuallyWritten": 9766673,
+        "keysCreated": 30,
+        "conditionalPutPayloadBytesOfferedPerRun": 1280662,
+        "deletes": 0,
+        "publicUrlsCreated": 0,
+        "lastNetworkActivity": "2026-10-01T03:5xZ (run 3); STOP inmediato posterior por orden del operador."
+      }
+    },
+    "nextAuthorizedRetryPlan": {
+      "status": "DESIGNED_NOT_EXECUTED",
+      "design": "Prueba condicional con objeto sintetico de 32 bytes en key propia studio/v1/projects/<project>/probe/ifnone-match-32b.bin (putImmutable IfNoneMatch:*), luego mismos-bytes (idempotente) y bytes-distintos (conflicto + objeto intacto). Prefijos probe/ no colisionan con assets/ ni checkpoints/ usados por sync/recover/inventario. Sin archivos fixture de 641KB.",
+      "preconditions": [
+        "coordinador autoriza retry",
+        "bucket resuelto === video-maker-archive-prd (guard duro ya activo)"
+      ]
+    }
+  }
+}

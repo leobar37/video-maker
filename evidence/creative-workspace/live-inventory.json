@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "bucket": "video-maker-archive-prd",
+  "projectIds": [
+    "cw-live-1001-447742",
+    "cw-live-1001-447742-solo"
+  ],
+  "generatedAt": "2026-10-01T04:30:59.595Z",
+  "revisions": [
+    {
+      "projectId": "cw-live-1001-447742",
+      "assetId": "bfc-cover",
+      "revisionId": "d004",
+      "rootHash": "ebaa6594412eb3bfff9b6362a81da3016f02c31343265f46ea8d74de5297903b",
+      "manifestKey": "studio/v1/projects/cw-live-1001-447742/assets/bfc-cover/revisions/d004/manifest.json"
+    },
+    {
+      "projectId": "cw-live-1001-447742",
+      "assetId": "bfc-cover",
+      "revisionId": "d005",
+      "rootHash": "112fc2ee05f117449ba69677eebf0e48be254ccbcd0b10cc05248fdc9db05f6e",
+      "manifestKey": "studio/v1/projects/cw-live-1001-447742/assets/bfc-cover/revisions/d005/manifest.json"
+    },
+    {
+      "projectId": "cw-live-1001-447742-solo",
+      "assetId": "hello-video",
+      "revisionId": "d006",
+      "rootHash": "0580212e3202ab731b428e26cbad3a2e2eff0f927c5b4f0eb46669f9cdc31d51",
+      "manifestKey": "studio/v1/projects/cw-live-1001-447742-solo/assets/hello-video/revisions/d006/manifest.json"
+    },
+    {
+      "projectId": "cw-live-1001-447742-solo",
+      "assetId": "hello-video",
+      "revisionId": "d007",
+      "rootHash": "98413aa8d983aa142f87c7e973d5dfcdfc14bbe0dea34c9fa375168b450a368b",
+      "manifestKey": "studio/v1/projects/cw-live-1001-447742-solo/assets/hello-video/revisions/d007/manifest.json"
+    }
+  ],
+  "keys": [
+    {
+      "key": "objects/05/05348f7fb8d52b2e284ec7de1fa9b7bf64c5277e95040c271c5f42e64e5a482c",
+      "bytes": 1085
+    },
+    {
+      "key": "objects/06/06c374e84d4413af61106b6806b2f6baddb86798c39b117b2c96cdd0fbf6002d",
+      "bytes": 800773
+    },
+    {
+      "key": "objects/1a/1ab7a391ef1e3df6d216a05e15d3046e86599784be0fdf37342f64c309e72da8",
+      "bytes": 642152
+    },
+    {
+      "key": "objects/1b/1bc205bf1bebc058fff7218f2ce3854e28116d3834d90633868205d18275e47d",
+      "bytes": 1081
+    },
+    {
+      "key": "objects/1f/1f44d700380a7f3842c036fae1b3417b2181dd93b1ff4a0b706e62142fef9215",
+      "bytes": 52863
+    },
+    {
+      "key": "objects/24/24ef8656dcc2aab0deb2fe084deb0d45d1f2b81e370c3b4494c47a4c1fb96d39",
+      "bytes": 498
+    },
+    {
+      "key": "objects/34/34bff2bb5dd62101229ea4006ebace95aec3e80a7af0331cd63e493e40cdfc48",
+      "bytes": 528
+    },
+    {
+      "key": "objects/3d/3d60393288b8c30b4d29416eac530c1dda1f7eddf22bcdbb618924f91b008c66",
+      "bytes": 1778068
+    },
+    {
+      "key": "objects/3e/3efc7565dd09d3f1bc82c8f1baef34b3426c9c61cc64ef72493e5e0c3ed3ce39",
+      "bytes": 1222777
+    },
+    {
+      "key": "objects/47/47e1aa7046213137f65dc8b3cf9abc946f97e1ea3cb95afba6b9ead562b29b8a",
+      "bytes": 1207435
+    },
+    {
+      "key": "objects/4a/4acbbf45ced9260bdbe5d100e9ee98f0afd7691c9d5314fa524892ac8bf3d059",
+      "bytes": 1093
+    },
+    {
+      "key": "objects/52/521a0508af8fd13d75c3de702b5310b08664d4722b0dc534f54889576142c7de",
+      "bytes": 430
+    },
+    {
+      "key": "objects/55/556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+      "bytes": 640331
+    },
+    {
+      "key": "objects/60/60b69dba5beffb32021f4f1f0b59e4a3df9ef7a8e6b4d61de06296a9554876d9",
+      "bytes": 110
+    },
+    {
+      "key": "objects/77/77944aa7cc4fd084b1bc859c457d6493f0c61478e9693a1fc6ef781d8f976b86",
+      "bytes": 661
+    },
+    {
+      "key": "objects/94/94ac08a91c2dc6aec7d8ff9a401a09b20c230227f49f6735c77ac51b200cfc56",
+      "bytes": 69994
+    },
+    {
+      "key": "objects/a7/a7bc99b678e5b300459237455172be5d4349655dbba79f2027e8b6dfcb9652e9",
+      "bytes": 388
+    },
+    {
+      "key": "objects/b2/b29de3cc82bc9b2e627f83767ed0ee81de9adeddb4e7d9474171ccce51caea15",
+      "bytes": 28826
+    },
+    {
+      "key": "objects/b8/b8b78e43b6df18b0f0c587b7b5975c5321b6597b09e56906cdf10e1d3baf1fb6",
+      "bytes": 799105
+    },
+    {
+      "key": "objects/d0/d0ff9d7a1e7574f723a268475445ae258901c43f314c4cb5f027374ac16e0180",
+      "bytes": 2481138
+    },
+    {
+      "key": "objects/d7/d75fbc4db65868ce141f714ac959236f8e95ccf78e7a9f73f66baf941f8cb269",
+      "bytes": 661
+    },
+    {
+      "key": "objects/e4/e4987d10045742775b745f54ca702feb57b7cb30a3cbb54dee0e94c86e9878a5",
+      "bytes": 2335
+    },
+    {
+      "key": "objects/eb/ebe64561139b48535fc7cb93f4e166c65cea36befb71f1e42563dd3141c14d9c",
+      "bytes": 14093
+    },
+    {
+      "key": "objects/fa/fa75d5cdb3c99395dcbc88f78155e39c1c4e82c38c1f074766ddb5f2b8e28787",
+      "bytes": 769
+    },
+    {
+      "key": "studio/v1/projects/cw-live-1001-447742-solo/assets/hello-video/revisions/d006/manifest.json",
+      "bytes": 5858
+    },
+    {
+      "key": "studio/v1/projects/cw-live-1001-447742-solo/assets/hello-video/revisions/d007/manifest.json",
+      "bytes": 5822
+    },
+    {
+      "key": "studio/v1/projects/cw-live-1001-447742-solo/checkpoints/d009.json",
+      "bytes": 314
+    },
+    {
+      "key": "studio/v1/projects/cw-live-1001-447742/assets/bfc-cover/revisions/d004/manifest.json",
+      "bytes": 3620
+    },
+    {
+      "key": "studio/v1/projects/cw-live-1001-447742/assets/bfc-cover/revisions/d005/manifest.json",
+      "bytes": 3684
+    },
+    {
+      "key": "studio/v1/projects/cw-live-1001-447742/checkpoints/d008.json",
+      "bytes": 307
+    },
+    {
+      "key": "studio/v1/projects/cw-live-1001-447742/probe/ifnone-match-32b.bin",
+      "bytes": 32
+    }
+  ],
+  "namespaceBytes": 9766831
+}

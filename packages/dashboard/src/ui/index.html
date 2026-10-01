@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Taller creativo · Catálogo studio (solo lectura)</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="app-header-text">
+        <p class="app-kicker">Studio · Biblioteca creativa</p>
+        <h1>Taller creativo</h1>
+        <p class="muted">Tus piezas, versiones y formatos. Todo a primera vista.</p>
+      </div>
+      <span class="readonly-label">Solo lectura</span>
+    </header>
+
+    <nav class="view-switch" aria-label="Vista del taller">
+      <button id="view-gallery" type="button" aria-pressed="true">Galería</button>
+      <button id="view-instagram" type="button" aria-pressed="false">Instagram</button>
+    </nav>
+
+    <details class="filter-panel" id="filters-panel" open>
+      <summary>Filtrar cliente o proyecto</summary>
+
+    <section class="filters" aria-label="Filtros del catálogo">
+      <div class="field">
+        <label for="filter-client">Cliente</label>
+        <select id="filter-client"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="filter-project">Proyecto</label>
+        <select id="filter-project"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="filter-asset">Buscar pieza</label>
+        <input id="filter-asset" type="text" list="asset-options" placeholder="ID de la pieza" autocomplete="off" />
+        <datalist id="asset-options"></datalist>
+      </div>
+      <div class="field">
+        <label for="filter-kind">Tipo</label>
+        <select id="filter-kind">
+          <option value="">Todos</option>
+          <option value="image">Imágenes</option>
+          <option value="svg">SVG</option>
+          <option value="video">Videos</option>
+          <option value="other">Otros archivos</option>
+        </select>
+      </div>
+      <div class="field field-actions">
+        <button id="reload" type="button">Actualizar</button>
+      </div>
+    </section>
+    </details>
+
+    <section id="status" class="status" role="status" aria-live="polite"></section>
+
+    <main id="entries" class="entries" aria-label="Revisiones del catálogo"></main>
+    <section id="instagram-view" class="instagram-view" aria-label="Propuesta de perfil Instagram" hidden></section>
+
+    <footer class="app-footer">
+      <p class="muted">
+        Vista de solo lectura · Archivos originales, sin regenerar. HTML, JS y SVG se descargan de forma segura.
+      </p>
+    </footer>
+  </body>
+</html>

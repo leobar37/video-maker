@@ -32,11 +32,15 @@ import type {
 import type { MediaCommandDeps } from '../pipeline/deps';
 import { defaultMediaDeps } from '../pipeline/deps';
 import {
+  isRemoteSource,
   runClipFrames,
+  selectDistinctSpans,
+  runClipFramesKeys,
   transcribeToTranscript,
   type ClipWord,
   type FrameEntry,
   type FramesManifest,
+  type ProposedWindow,
   type ShardEntry,
   type ShardsManifest,
   type TranscriptDocument,
@@ -203,14 +207,24 @@ async function buildShardJobs(
       });
     }
     const contextOnly = new Set(shard.contextOnlyFrameIds);
-    const analyzableCount = shard.frameIds.filter((frameId) => !contextOnly.has(frameId)).length;
+    // Vision analyzes KEY frames only (`rol: 'key'`): `base` frames ride along
+    // as visual context but are never charged or counted (plan: "small
+    // analysis solo sobre keyframes").
+    const analyzableCount = shard.frameIds.filter(
+      (frameId) =>
+        !contextOnly.has(frameId) && inputs.framesById.get(frameId)?.rol !== 'base',
+    ).length;
     const times = frames.map((frame) => frame.t);
     const from = times.length > 0 ? Math.min(...times) : 0;
     const to = times.length > 0 ? Math.max(...times) : 0;
-    const transcriptSlice = words
-      .filter((word) => word.end >= from && word.start <= to)
-      .map((word) => word.word)
-      .join(' ');
+    // Window-scoped AND char-capped: the model never receives more than
+    // `ANALYZE_TRANSCRIPT_SLICE_CHARS` of transcript per shard call.
+    const transcriptSlice = truncateTranscriptSlice(
+      words
+        .filter((word) => word.end >= from && word.start <= to)
+        .map((word) => word.word)
+        .join(' '),
+    );
     const analysisRelative = `clips/analysis/${shard.id}.json`;
     jobs.push({
       shard,
@@ -224,6 +238,29 @@ async function buildShardJobs(
     });
   }
   return jobs;
+}
+
+/**
+ * Plan and run pick the SAME shards: the best NON-OVERLAPPING windows (the
+ * manifest is pre-ranked by score; dense sources hatch near-duplicate windows
+ * around one hook and the shard budget must not be spent on a single moment).
+ */
+function selectAnalysisJobs(
+  allJobs: ShardJob[],
+  maxShards: number | undefined,
+): ShardJob[] {
+  if (maxShards === undefined) return allJobs;
+  return selectDistinctSpans(
+    allJobs,
+    (job) => {
+      const times = job.frames.map((frame) => frame.t);
+      return {
+        start: times.length > 0 ? Math.min(...times) : 0,
+        end: times.length > 0 ? Math.max(...times) : 0,
+      };
+    },
+    Math.max(0, Math.floor(maxShards)),
+  );
 }
 
 interface ShardRunResult {
@@ -273,6 +310,7 @@ async function analyzeShardJob(input: {
   store: PaidOperationStore;
   runner: AgentRunner;
   now: () => Date;
+  timeoutMs: number;
 }): Promise<ShardRunResult> {
   const { job, store, now } = input;
   const prior = await store.get(job.attemptId);
@@ -311,7 +349,9 @@ async function analyzeShardJob(input: {
       attemptId: job.attemptId,
       now,
       submit: async () => {
-        outcome = await runShardAnalysis(input.runner, job.frames, agentCtx);
+        outcome = await runShardAnalysis(input.runner, job.frames, agentCtx, {
+          timeoutMs: input.timeoutMs,
+        });
         return {
           receipt: {
             provider: input.backend,
@@ -380,16 +420,16 @@ export function buildClipAnalysisSpecs(deps: MediaCommandDeps = defaultMediaDeps
   const clipFrames: CommandSpec = {
     verb: 'clip-frames',
     summary:
-      'Sample the local source into frames + shard manifests (clips/frames.json, ' +
-      'clips/shards.json). Pure ffmpeg/ffprobe, free, offline.',
+      'Sample the source (local file or http(s) URL via yt-dlp) into frames + ' +
+      'shard manifests (clips/frames.json, clips/shards.json). Pure ffmpeg/ffprobe, free.',
     args: [
       PROJECT_ARG,
       {
         name: 'src',
         kind: 'string',
         description:
-          'Source video file (local only; download remote sources first). Required in run ' +
-          'mode; optional for --plan.',
+          'Source video: local file path or http(s) URL (remote sources are fetched with ' +
+          'yt-dlp into clips/source.mp4). Required in run mode; optional for --plan.',
       },
       {
         name: 'frame-every',
@@ -409,6 +449,26 @@ export function buildClipAnalysisSpecs(deps: MediaCommandDeps = defaultMediaDeps
         default: 5,
         description: 'Context frames carried into the next shard.',
       },
+      {
+        name: 'keys',
+        kind: 'boolean',
+        default: false,
+        description:
+          'Dense second pass: keyframes inside the proposed windows (needs clips/proposals.json) ' +
+          'and one analysis shard per window.',
+      },
+      {
+        name: 'key-fps',
+        kind: 'number',
+        default: 1,
+        description: 'Dense samples per second inside proposed windows (--keys).',
+      },
+      {
+        name: 'key-margin',
+        kind: 'number',
+        default: 5,
+        description: 'Seconds of context margin around each proposed window (--keys).',
+      },
     ],
     supportsPlan: true,
     writes: [
@@ -423,9 +483,27 @@ export function buildClipAnalysisSpecs(deps: MediaCommandDeps = defaultMediaDeps
       const frameEvery = argNumber(ctx.args, 'frame-every') ?? 1;
       const shardSize = argNumber(ctx.args, 'shard-size') ?? 60;
       const contextFrames = argNumber(ctx.args, 'context-frames') ?? 5;
+      if (argBoolean(ctx.args, 'keys', false)) {
+        const keyFps = argNumber(ctx.args, 'key-fps') ?? 1;
+        const keyMargin = argNumber(ctx.args, 'key-margin') ?? 5;
+        return [
+          {
+            action:
+              `densify frames at ${keyFps}/s inside the proposed windows ±${keyMargin}s ` +
+              '(rol key vs base)',
+            writes: 'clips/frames.json',
+          },
+          {
+            action: 're-shard as one vision shard per proposed window (best preScore first)',
+            writes: 'clips/shards.json',
+          },
+        ];
+      }
       return [
         {
-          action: `probe ${src} with ffprobe (duration, fps, size, sha256)`,
+          action: isRemoteSource(src)
+            ? `download ${src} with yt-dlp → clips/source.mp4, then probe (duration, fps, size, sha256)`
+            : `probe ${src} with ffprobe (duration, fps, size, sha256)`,
           target: src,
           writes: 'clips/source.json',
         },
@@ -445,17 +523,43 @@ export function buildClipAnalysisSpecs(deps: MediaCommandDeps = defaultMediaDeps
     },
     async run(ctx): Promise<CommandResult> {
       if (ctx.mode === 'plan') refusePlanMode(ctx, 'clip-frames');
+      const projectDir = resolveProjectDir(ctx);
+      if (argBoolean(ctx.args, 'keys', false)) {
+        try {
+          const proposals = await readManifest<{ windows?: ProposedWindow[] }>(
+            join(projectDir, 'clips', 'proposals.json'),
+            'clips/proposals.json',
+          );
+          if (proposals === undefined) {
+            return ctx.fail(
+              'clip-frames: --keys needs clips/proposals.json — run clip-propose first.',
+            );
+          }
+          const result = await runClipFramesKeys(deps.process, projectDir, {
+            windows: proposals.windows ?? [],
+            keyFps: argNumber(ctx.args, 'key-fps'),
+            keyMargin: argNumber(ctx.args, 'key-margin'),
+          });
+          const keyCount = result.frames.frames.filter((frame) => frame.rol === 'key').length;
+          ctx.out(
+            `clip-frames --keys: ${result.frames.frames.length} frame(s) (${keyCount} key) → ` +
+              `clips/frames.json, ${result.shards.shards.length} window shard(s) → clips/shards.json`,
+          );
+          return { exitCode: 0 };
+        } catch (error) {
+          return ctx.fail(`clip-frames: ${errorText(error)}`);
+        }
+      }
       const src = argString(ctx.args, 'src');
       if (src === undefined) {
         return ctx.fail(
-          'clip-frames: --src <file> is required in run mode — a local video file path ' +
-            '(download remote sources first). Run with --plan to preview without it.',
+          'clip-frames: --src <file-or-url> is required in run mode — a local video file ' +
+            'path or an http(s) URL. Run with --plan to preview without it.',
         );
       }
-      const projectDir = resolveProjectDir(ctx);
       try {
         const result = await runClipFrames(deps.process, projectDir, {
-          srcPath: resolve(ctx.cwd, src),
+          srcPath: isRemoteSource(src) ? src : resolve(ctx.cwd, src),
           frameEverySeconds: argNumber(ctx.args, 'frame-every'),
           shardSize: argNumber(ctx.args, 'shard-size'),
           contextFrames: argNumber(ctx.args, 'context-frames'),
@@ -558,6 +662,12 @@ export function buildClipAnalysisSpecs(deps: MediaCommandDeps = defaultMediaDeps
         description: 'Shards analyzed concurrently (journal writes stay serialized).',
       },
       {
+        name: 'timeout-ms',
+        kind: 'number',
+        default: 600_000,
+        description: 'Per-shard agent timeout in milliseconds (default 600000).',
+      },
+      {
         name: 'objective',
         kind: 'string',
         default: DEFAULT_OBJECTIVE,
@@ -573,8 +683,7 @@ export function buildClipAnalysisSpecs(deps: MediaCommandDeps = defaultMediaDeps
       const inputs = await readAnalysisInputs(projectDir);
       const allJobs = await buildShardJobs(inputs, projectDir);
       const maxShards = argNumber(ctx.args, 'max-shards');
-      const selected =
-        maxShards === undefined ? allJobs : allJobs.slice(0, Math.max(0, Math.floor(maxShards)));
+      const selected = selectAnalysisJobs(allJobs, maxShards);
       if (selected.length === 0) return [];
       const backend = argString(ctx.args, 'backend') ?? 'omp';
       const steps: PlanStep[] = selected.map((job) => ({
@@ -640,11 +749,11 @@ export function buildClipAnalysisSpecs(deps: MediaCommandDeps = defaultMediaDeps
         return ctx.fail(`clip-analyze: ${errorText(error)}`);
       }
       const maxShards = argNumber(ctx.args, 'max-shards');
-      const selected =
-        maxShards === undefined ? allJobs : allJobs.slice(0, Math.max(0, Math.floor(maxShards)));
+      const selected = selectAnalysisJobs(allJobs, maxShards);
       let runner: AgentRunner;
+      const timeoutMs = argNumber(ctx.args, 'timeout-ms') ?? 600_000;
       try {
-        runner = createAgentRunner(backend, { process: deps.process });
+        runner = createAgentRunner(backend, { process: deps.process, timeoutMs });
       } catch (error) {
         return ctx.fail(`clip-analyze: ${errorText(error)}`);
       }
@@ -683,6 +792,7 @@ export function buildClipAnalysisSpecs(deps: MediaCommandDeps = defaultMediaDeps
                 store,
                 runner,
                 now,
+                timeoutMs,
               }),
             ),
           );
@@ -769,19 +879,24 @@ import {
 } from '@videomaker/schemas';
 
 import {
+  applyCriticVerdicts,
   buildCandidates,
   buildClipCards,
+  buildCriticState,
   explainCandidate,
   locateAt,
+  parseCriticResponse,
   planStripGrid,
   proposeWindows,
   renderClipsDashboard,
   renderStripGrid,
   resolveFrameAt,
   runClipPolish,
+  truncateTranscriptSlice,
+  REVIEW_MAX_ROUNDS,
+  REVIEW_RUBRIC,
   type ClipDashboardCard,
   type LocateResult,
-  type ProposedWindow,
 } from '../pipeline/clip';
 
 /** Repeatable string flags (`--id a --id b`): order kept, empties dropped. */
@@ -1035,6 +1150,26 @@ export function buildClipDecisionSpecs(deps: MediaCommandDeps = defaultMediaDeps
         kind: 'string',
         description: 'JSON file mapping range/window ids to ClipSocial drafts from the agent.',
       },
+      {
+        name: 'review',
+        kind: 'boolean',
+        default: false,
+        description:
+          'Agent self-review: up to 2 critic rounds over the candidates; fixes are applied ' +
+          'and journaled in revisions[] (plan rubric).',
+      },
+      {
+        name: 'backend',
+        kind: 'string',
+        default: 'omp',
+        description: 'Agent backend for --review: omp | jev (default omp).',
+      },
+      {
+        name: 'timeout-ms',
+        kind: 'number',
+        default: 600_000,
+        description: 'Per-round critic timeout in milliseconds (--review, default 600000).',
+      },
     ],
     supportsPlan: true,
     writes: ['clips/candidates.json', 'clips/scoring.json'],
@@ -1062,13 +1197,22 @@ export function buildClipDecisionSpecs(deps: MediaCommandDeps = defaultMediaDeps
           },
         ];
       }
-      return [
+      const steps: PlanStep[] = [
         {
           action: scoreAction,
           target: 'clips/transcript.json',
           writes: 'clips/candidates.json',
         },
       ];
+      if (argBoolean(ctx.args, 'review', false)) {
+        steps.push({
+          action:
+            `agent self-review (up to ${REVIEW_MAX_ROUNDS} critic rounds, plan rubric) ` +
+            'journaled in revisions[]',
+          writes: 'clips/candidates.json',
+        });
+      }
+      return steps;
     },
     async run(ctx): Promise<CommandResult> {
       if (ctx.mode === 'plan') refusePlanMode(ctx, 'clip-ranges');
@@ -1201,6 +1345,56 @@ export function buildClipDecisionSpecs(deps: MediaCommandDeps = defaultMediaDeps
           return ctx.fail(`clip-ranges: ${errorText(error)}`);
         }
         return { exitCode: 0 };
+      }
+      if (argBoolean(ctx.args, 'review', false)) {
+        const backendRaw = argString(ctx.args, 'backend') ?? 'omp';
+        if (!(BACKEND_IDS as readonly string[]).includes(backendRaw)) {
+          return ctx.fail(`clip-ranges: unknown --backend "${backendRaw}" — expected omp | jev.`);
+        }
+        let durationSeconds: number | undefined;
+        try {
+          const sourceDoc = await readManifest<{ durationSeconds?: unknown }>(
+            join(projectDir, 'clips', 'source.json'),
+            'clips/source.json',
+          );
+          if (typeof sourceDoc?.durationSeconds === 'number') {
+            durationSeconds = sourceDoc.durationSeconds;
+          }
+        } catch (error) {
+          return ctx.fail(`clip-ranges: ${errorText(error)}`);
+        }
+        const runner = createAgentRunner(backendRaw as BackendId, {
+          process: deps.process,
+          timeoutMs: argNumber(ctx.args, 'timeout-ms') ?? 600_000,
+        });
+        try {
+          for (let round = 1; round <= REVIEW_MAX_ROUNDS; round += 1) {
+            // Context guard: the critic only ever sees the top-scored
+            // candidates in compact form, under a hard character budget —
+            // a multi-hour transcript must never reach the model whole.
+            const { state, reviewedIds } = buildCriticState({
+              objective: objective ?? '',
+              ...(durationSeconds !== undefined ? { sourceDurationSeconds: durationSeconds } : {}),
+              candidates,
+            });
+            const raw = await runner.decide(state, REVIEW_RUBRIC);
+            const response = parseCriticResponse(raw);
+            candidates = applyCriticVerdicts(candidates, response.verdicts, round, {
+              ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+            });
+            ctx.out(
+              `clip-ranges --review: round ${round}/${REVIEW_MAX_ROUNDS} — ` +
+                `${response.verdicts.length} verdict(s) over ${reviewedIds.length}/${candidates.length + response.verdicts.filter((v) => v.patch?.discard).length} reviewed, ` +
+                `${candidates.length} candidate(s) kept`,
+            );
+            const allPass =
+              response.verdicts.length > 0 &&
+              response.verdicts.every((verdict) => verdict.verdict === 'pass');
+            if (allPass) break;
+          }
+        } catch (error) {
+          return ctx.fail(`clip-ranges: review failed: ${errorText(error)}`);
+        }
       }
       try {
         await mkdir(join(projectDir, 'clips'), { recursive: true });
@@ -1699,10 +1893,22 @@ export function buildClipDecisionSpecs(deps: MediaCommandDeps = defaultMediaDeps
       } catch (error) {
         return ctx.fail(`clip-viewer: ${errorText(error)}`);
       }
+      // Dashboard ranges = every candidate PLUS any approved range introduced
+      // later (the polish stage splits a window: `clip-02-b` exists only in
+      // decisions-ready/decisions, never in candidates). Without this union the
+      // approved-and-rendered clip silently never appears on the dashboard.
+      const candidateIds = new Set(candidates.map((range) => range.id));
+      const rangesForCards: ClipRange[] = [
+        ...candidates,
+        ...decisions
+          .filter((entry) => entry.status === 'approved' && !candidateIds.has(entry.range.id))
+          .map((entry) => entry.range),
+      ];
+
       const frames = framesDoc?.frames ?? [];
       const frameIdsByRange: Record<string, string[]> = {};
       const stillByRange: Record<string, string> = {};
-      for (const range of candidates) {
+      for (const range of rangesForCards) {
         frameIdsByRange[range.id] = frames
           .filter((frame) => frame.t >= range.start && frame.t <= range.end)
           .sort((a, b) => a.t - b.t)
@@ -1710,16 +1916,33 @@ export function buildClipDecisionSpecs(deps: MediaCommandDeps = defaultMediaDeps
         if (frames.length > 0) {
           const midpoint = (range.start + range.end) / 2;
           const still = resolveFrameAt(frames, midpoint);
-          stillByRange[range.id] = join('clips', 'frames', `${still.frame_id}.jpg`);
+          // Relative to the dashboard location (`clips/dashboard/`), so the
+          // poster resolves whether the project is served from its root or
+          // opened as a file.
+          stillByRange[range.id] = join('..', 'frames', `${still.frame_id}.jpg`);
+        }
+      }
+      const approvedIds = new Set(
+        decisions.filter((entry) => entry.status === 'approved').map((entry) => entry.range.id),
+      );
+      // Player only for approved clips whose render already exists on disk:
+      // a player pointing at a 404 is worse than the still.
+      const renderedIds = new Set<string>();
+      for (const id of approvedIds) {
+        if (await pathExists(projectAbsolute(projectDir, `renders/clips/${id}.mp4`))) {
+          renderedIds.add(id);
         }
       }
       const cards: ClipDashboardCard[] = buildClipCards(
-        candidates,
+        rangesForCards,
         decisions,
         frameIdsByRange,
       ).map((card) => ({
         ...card,
         ...(stillByRange[card.id] !== undefined ? { stillPath: stillByRange[card.id] } : {}),
+        ...(renderedIds.has(card.id)
+          ? { videoPath: `../../renders/clips/${card.id}.mp4` }
+          : {}),
       }));
       const header = argString(ctx.args, 'objective');
       const html = renderClipsDashboard({ cards, ...(header !== undefined ? { header } : {}) });
@@ -1786,9 +2009,14 @@ import { fileURLToPath } from 'node:url';
 
 import { loadProject, sha256File, type Project } from '@videomaker/core';
 import { filmTimingPlan, type TimingPlan } from '@videomaker/motion-core';
-import { normalizeAudioLoudness } from '@videomaker/motion-remotion/loudness';
+import {
+  buildEbur128MeasureArgs,
+  normalizeAudioLoudness,
+  parseEbur128Summary,
+  passesLoudnessGate,
+} from '@videomaker/motion-remotion/loudness';
 
-import { projectAbsolute } from '../pipeline/assemble';
+import { ffmpegStderrDetail, projectAbsolute } from '../pipeline/assemble';
 import {
   CLIP_FILM_FPS,
   CLIP_FILM_HEIGHT,
@@ -1857,6 +2085,8 @@ interface ClipRenderContext {
   sourceRelative: string;
   /** Every validated `clips/analysis` frame of the project. */
   analyses: readonly FrameAnalysis[];
+  /** Whisper `word_timestamps` on the source clock (burned-in subtitles). */
+  words: readonly ClipWord[];
   /** Intrinsic source frame size from `clips/source.json`. */
   sourceSize: { width: number; height: number };
 }
@@ -1874,6 +2104,12 @@ interface ClipQaReport {
   fps: number;
   durationFrames: number;
   expectedDurationSeconds: number;
+  /** Independent ebur128 measurement recorded as evidence (never aborts). */
+  loudness?: {
+    integratedLufs: number;
+    truePeakDbtp: number;
+    verdict: 'pass' | 'warn';
+  };
 }
 
 /**
@@ -1916,6 +2152,7 @@ async function renderApprovedClip(input: {
   const props = buildClipFilmProps(context.project, {
     range,
     analyses: context.analyses,
+    words: context.words,
     sourceSize: context.sourceSize,
     stagedVideoSrc: paths.stagedVideoSrc,
     stagedAudioSrc: paths.stagedAudioSrc,
@@ -1940,7 +2177,19 @@ async function renderApprovedClip(input: {
     inputProps: props,
     expectedDurationInFrames: timingPlan.totalFrames,
     outputLocation: paths.mp4Absolute,
-    concurrency: null,
+    // 2 render threads: the Remotion default (≈ cores/2) exhausts the
+    // headless browser on this workstation (target-closed crash loops).
+    concurrency: 2,
+    // The 30s default aborts a frame mid-render and restarts the WHOLE job
+    // (observed 30+ min crash loops); duos decode three video layers a frame.
+    timeoutInMilliseconds: 180_000,
+    // Captured frames are re-encoded to h264 right after, so lossless PNG is
+    // pure extra work per frame.
+    imageFormat: 'jpeg',
+    jpegQuality: 92,
+    // The clip reuses ONE source file on every frame: cache it instead of
+    // letting the decoder re-read it.
+    offthreadVideoCacheSizeInBytes: 1_500_000_000,
   });
   await mkdir(dirname(paths.stillAbsolute), { recursive: true });
   await deps.render.renderStill({
@@ -1950,20 +2199,42 @@ async function renderApprovedClip(input: {
     output: paths.stillAbsolute,
     frame: timingPlan.spans[0]!.startFrame,
     expectedDurationInFrames: timingPlan.totalFrames,
+    timeoutInMilliseconds: 180_000,
   });
 
   // 4. Loudness gate (the existing `runAssemble` gate over the trim's audio)
-  //    + the qa evidence report with the sha256 of both artifacts.
-  const normalization = await normalizeAudioLoudness(paths.mp4Absolute, {
-    enabled: true,
-    runner: deps.ffmpeg,
-    // Cap every AAC re-encode at the exact VIDEO span
-    // (expectedDurationInFrames / fps), never the audio-inclusive container
-    // length: the AAC quantization (~1 frame + priming) then stays inside the
-    // `end - start ± 1 frame` duration contract.
-    capDurationSeconds: timingPlan.totalFrames / props.fps,
-    ...(deps.log ? { log: deps.log } : {}),
-  });
+  //    + the qa evidence report with the sha256 of both artifacts. Like
+  //    `runAssemble`, the measurement is EVIDENCE: a gate miss downgrades to a
+  //    recorded `warn` verdict (peaky content cannot always reach -14 LUFS
+  //    under the true-peak cap) instead of discarding an otherwise valid render.
+  let loudness: ClipQaReport['loudness'];
+  try {
+    await normalizeAudioLoudness(paths.mp4Absolute, {
+      enabled: true,
+      runner: deps.ffmpeg,
+      // Cap every AAC re-encode at the exact VIDEO span
+      // (expectedDurationInFrames / fps), never the audio-inclusive container
+      // length: the AAC quantization (~1 frame + priming) then stays inside the
+      // `end - start ± 1 frame` duration contract.
+      capDurationSeconds: timingPlan.totalFrames / props.fps,
+      ...(deps.log ? { log: deps.log } : {}),
+    });
+  } catch (error) {
+    if (!errorText(error).includes('LOUDNESS_GATE_MISSED')) throw error;
+  }
+  const measurement = await deps.ffmpeg.run(buildEbur128MeasureArgs(paths.mp4Absolute));
+  if (measurement.exitCode !== 0) {
+    throw new Error(
+      `clip-render: loudness measurement failed (exit ${measurement.exitCode}): ` +
+        ffmpegStderrDetail(measurement.stderr),
+    );
+  }
+  const loudnessStats = parseEbur128Summary(measurement.stderr);
+  loudness = {
+    integratedLufs: loudnessStats.integratedLufs,
+    truePeakDbtp: loudnessStats.truePeakDbtp,
+    verdict: passesLoudnessGate(loudnessStats, {}) ? 'pass' : 'warn',
+  };
   const report: ClipQaReport = {
     schemaVersion: 1,
     id: range.id,
@@ -1976,17 +2247,15 @@ async function renderApprovedClip(input: {
     fps: CLIP_FILM_FPS,
     durationFrames: timingPlan.totalFrames,
     expectedDurationSeconds: trim.durationSeconds,
+    loudness,
   };
   await mkdir(dirname(paths.reportAbsolute), { recursive: true });
   await writeFile(paths.reportAbsolute, `${JSON.stringify(report, null, 2)}\n`);
   input.out(
     `clip-render: ${range.id} → ${paths.mp4Relative} (${report.durationFrames} frames) + ` +
       `${paths.stillRelative} + ${paths.reportRelative}` +
-      (normalization.measured !== undefined
-        ? `; loudness I=${normalization.measured.integratedLufs.toFixed(2)} LUFS / ` +
-          `TP=${normalization.measured.truePeakDbtp.toFixed(2)} dBTP` +
-          `${normalization.applied ? ' (normalized)' : ''}`
-        : ''),
+      `; loudness I=${loudness.integratedLufs.toFixed(2)} LUFS / ` +
+      `TP=${loudness.truePeakDbtp.toFixed(2)} dBTP (${loudness.verdict})`,
   );
   return report;
 }
@@ -2113,6 +2382,7 @@ export function buildClipRenderSpecs(deps: MediaCommandDeps = defaultMediaDeps()
           project: await loadProject(projectDir),
           sourceRelative: 'clips/source.mp4',
           analyses: await readAnalysisFrames(projectDir),
+          words: await readTranscriptWords(projectDir),
           sourceSize: { width, height },
         };
         for (const range of selection) {

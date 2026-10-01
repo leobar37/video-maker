@@ -21,6 +21,16 @@ import {
   makeContext,
 } from './registry';
 import { allSpecs } from './all-specs';
+import {
+  STUDIO_GROUP_SUBS,
+  groupedVerbDisplay,
+  isJsonModeArgv,
+  isStudioGroupedVerb,
+  normalizeGroupedVerb,
+  studioArgvAdapter,
+  studioEnvelopeError,
+  studioEnvelopeOk,
+} from './specs/studio-pairs';
 import type { CommandRegistry, CommandSpec } from './spec-types';
 
 export interface RunCliOptions {
@@ -59,7 +69,13 @@ function splitInvocation(argv: readonly string[]): Invocation {
     if (invocation.verb === undefined) invocation.verb = token;
     else invocation.rest.push(token);
   }
-  return invocation;
+  // Grouped studio invocations (`client create`, `asset snapshot`, …) resolve
+  // to their internal verb BEFORE the registry lookup, via the exact
+  // whitelist in ./specs/studio-pairs. Legacy single-token verbs are
+  // unaffected (no legacy verb is a studio group). Global flags work the
+  // same before or after the pair because runtime flags were already
+  // stripped above and the subcommand must be the first remaining token.
+  return normalizeGroupedVerb(invocation);
 }
 
 /**
@@ -84,10 +100,19 @@ export async function runRegistry(
   if (!spec) {
     const known = registry
       .list()
-      .map((entry) => entry.verb)
+      .map((entry) => groupedVerbDisplay(entry.verb))
       .join(', ');
-    out(`error: verbo desconocido "${invocation.verb}". Verbs: ${known}.`);
-    out('Usá `vm --help` para el registro completo.');
+    const message = `verbo desconocido "${invocation.verb}". Verbs: ${known}.`;
+    // JSON usage errors are a studio-group contract: only unrecognized
+    // commands WITHIN known studio groups get the envelope. Legacy verbs
+    // keep the classic text even when --json is present.
+    const studioGroup = invocation.verb !== undefined && STUDIO_GROUP_SUBS[invocation.verb] !== undefined;
+    if (studioGroup && isJsonModeArgv(invocation.rest)) {
+      out(studioEnvelopeError({ code: 'INVALID_INPUT', message, details: { verb: invocation.verb } }));
+    } else {
+      out(`error: ${message}`);
+      out('Usá `vm --help` para el registro completo.');
+    }
     return 2;
   }
 
@@ -98,10 +123,19 @@ export async function runRegistry(
 
   let args: Record<string, string | number | boolean | string[]>;
   try {
-    args = parseArgs(spec.args, invocation.rest);
+    // Studio grouped specs enforce exact arity (at most one positional `<id>`)
+    // BEFORE the generic parser; legacy specs keep parseArgs untouched.
+    const restTokens = isStudioGroupedVerb(spec.verb)
+      ? studioArgvAdapter(spec.args, invocation.rest)
+      : invocation.rest;
+    args = parseArgs(spec.args, restTokens);
   } catch (error) {
     if (error instanceof ArgParseError) {
-      out(`error: ${error.message}`);
+      if (isStudioGroupedVerb(spec.verb) && isJsonModeArgv(invocation.rest)) {
+        out(studioEnvelopeError({ code: 'INVALID_INPUT', message: error.message }));
+      } else {
+        out(`error: ${error.message}`);
+      }
       return 2;
     }
     throw error;
@@ -118,14 +152,22 @@ export async function runRegistry(
       }
       // NFR-002: plan mode is pure — run() is never called here.
       const steps = await spec.plan(ctx);
-      out(formatPlanSteps(spec.verb, steps));
+      // Studio groups with --json print ONLY the envelope (steps as data);
+      // the human `plan:` rendering stays for everything else.
+      if (isStudioGroupedVerb(spec.verb) && isJsonModeArgv(invocation.rest)) {
+        out(studioEnvelopeOk({ verb: spec.verb, steps }));
+      } else {
+        out(formatPlanSteps(spec.verb, steps));
+      }
       return 0;
     }
     const result = await spec.run(ctx);
     return result.exitCode;
   } catch (error) {
     if (error instanceof CommandFailure) {
-      out(`error: ${error.message}`);
+      // `reported` failures already emitted their stable output (e.g. the
+      // studio --json envelope); printing again would corrupt stdout.
+      if (!error.reported) out(`error: ${error.message}`);
       return error.exitCode;
     }
     out(`error: ${error instanceof Error ? error.message : String(error)}`);

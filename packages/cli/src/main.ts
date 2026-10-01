@@ -17,4 +17,12 @@ if (!planMode) {
   setArchiveStorageSource(createR2ArchiveStorageSource());
 }
 
-process.exitCode = await runCli(argv, { cwd: process.cwd() });
+const exitCode = (await runCli(argv, { cwd: process.cwd() })) ?? 0;
+// Remotion's bundler keeps a dev-server handle open for the whole process, so
+// the CLI lingered long after the command had finished (observed 20+ min of
+// dead wall time per clip render, which dominated batch runtimes). Flush
+// stdout, then terminate deterministically.
+await new Promise<void>((resolve) => {
+  process.stdout.write('', () => resolve());
+});
+process.exit(exitCode);

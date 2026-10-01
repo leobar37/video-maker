@@ -14,7 +14,9 @@
   "dependencies": {
     "@videomaker/core": "workspace:*",
     "@videomaker/credentials": "workspace:*",
+    "@videomaker/dashboard": "workspace:*",
     "@videomaker/schemas": "workspace:*",
+    "@videomaker/studio": "workspace:*",
     "@videomaker/providers": "workspace:*",
     "@videomaker/motion-core": "workspace:*",
     "@videomaker/motion-remotion": "workspace:*"

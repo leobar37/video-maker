@@ -15,8 +15,12 @@ id_rsa*
 coverage/
 .tmp-*
 
+# Local research artifacts and downloaded reference media
+docs/artifacts/
+
 # Video/clip projects: generated artifacts (source media, frames, analysis,
 # renders, dashboards, spend/publication journals) — never repo material.
+# (Tracked fixtures like projects/demo stay tracked; only new artifacts hide.)
 projects/
 # Project folders of content work (posts, covers) — preserved on disk and
 # backed up, never committed.

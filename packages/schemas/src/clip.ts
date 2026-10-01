@@ -195,6 +195,16 @@ export const ClipBreakdownSchema = z.strictObject({
 });
 export type ClipBreakdown = z.infer<typeof ClipBreakdownSchema>;
 
+/** One agent self-review round journaled on a candidate (`clip-ranges --review`). */
+export const ClipRevisionSchema = z.strictObject({
+  round: z.number().int().min(1),
+  verdict: z.enum(['pass', 'revise']),
+  issues: z.array(z.string().min(1)),
+  /** True when the round's feedback landed (patch applied, discard, or a pass). */
+  applied: z.boolean(),
+});
+export type ClipRevision = z.infer<typeof ClipRevisionSchema>;
+
 /**
  * A candidate clip window cut from one source video (`clips/ranges.json`
  * entries): time bounds in seconds from the start of the source, the score
@@ -216,6 +226,8 @@ export const ClipRangeSchema = z
     layout: ClipLayoutSchema,
     faces: z.array(ClipFaceSchema),
     social: ClipSocialSchema,
+    /** Agent self-review journal (`clip-ranges --review`); absent otherwise. */
+    revisions: z.array(ClipRevisionSchema).optional(),
   })
   .superRefine((range, ctx) => {
     if (range.end <= range.start) {

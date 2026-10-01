@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.build.json",
     "test": "bun test",
-    "credentials:probe": "bun packages/credentials/scripts/probe.ts",
+    "studio:verify": "bun scripts/studio-verify.ts",
+    "studio:verify:r2": "bun scripts/studio-verify-r2.ts",
     "providers:smoke": "bun packages/providers/scripts/smoke.ts",
     "motion:still": "bun packages/motion-remotion/scripts/motion-still.ts",
     "vm": "bun packages/cli/src/main.ts",
@@ -16,5 +17,9 @@
   "devDependencies": {
     "@types/bun": "^1.4.0",
     "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "playwright-core": "^1.63.0",
+    "sharp": "^0.35.5"
   }
 }

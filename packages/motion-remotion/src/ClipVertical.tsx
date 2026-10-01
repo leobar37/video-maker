@@ -3,18 +3,20 @@
  *
  * A horizontal source video is adapted to the vertical canvas as three
  * SIBLING layers, never nested:
- *   1. a blurred cover backdrop of the same clip (scale-to-cover, blurred and
- *      dimmed so the sharp layer reads on top),
- *   2. the sharp foreground video cropped to an ANIMATED crop window driven by
- *      the directed-camera plan (`planCamera`/`cameraAt` over
- *      `scene.track.interactions`) — no track, or a static plan, falls back to
- *      a plain centre crop,
- *   3. the burned-in subtitles from `scene.narration`, laid over the crop as a
- *      sibling overlay so camera scaling can never touch the typography.
+ *   1. a blurred backdrop of the same clip (small raster + scale, blurred and
+ *      dimmed so the sharp layer reads on top) filling the whole canvas,
+ *   2. the sharp foreground video shown at NATIVE resolution — the crop window
+ *      maps 1:1 onto the canvas (`scale` is ALWAYS 1.0: zoom/upscale is
+ *      prohibited by the clip design) and is positioned on the canvas while
+ *      the camera plan slides it in `x(t)` (`planCamera`/`cameraAt` over
+ *      `scene.track.interactions`), never stretching a single pixel,
+ *   3. the burned-in subtitles from `scene.subtitleSegments` (whisper word
+ *      timestamps clipped to the window), laid over the crop as a SIBLING
+ *      overlay so camera motion can never touch the typography.
  *
  * This module also owns the shared clip primitives (`CropWindow`,
- * `clampCropWindow`, `CroppedVideo`, `ClipSubtitles`, `resolveClipMedia`,
- * `VERTICAL_SAFE_ZONES`) that `ClipPodcast.tsx` reuses.
+ * `clampCropWindow`, `nativeCropLayout`, `CroppedVideo`, `ClipSubtitles`,
+ * `resolveClipMedia`, `VERTICAL_SAFE_ZONES`) that `ClipPodcast.tsx` reuses.
  */
 
 import React from 'react';
@@ -29,7 +31,7 @@ import {
 
 import type { AssetResolver } from './assets';
 import type { SceneRendererComponent, SceneRenderProps } from './SceneRenderer';
-import { activeSegmentAt, buildTimedSegments } from './subtitle-segments';
+import { buildTimedSegments } from './subtitle-segments';
 import type { FilmBranding, FilmScene } from './types';
 
 /**
@@ -39,7 +41,7 @@ import type { FilmBranding, FilmScene } from './types';
  */
 export const VERTICAL_SAFE_ZONES = {
   top: 240,
-  bottom: 420,
+  bottom: 220,
   left: 90,
   right: 90,
 } as const;
@@ -84,35 +86,59 @@ export function clampCropWindow(
 }
 
 /**
- * The cover crop window of `source` for a `canvas`-aspect viewport, centred on
- * `focusX` (source pixels). The window keeps the canvas aspect ratio and is as
- * large as the source allows — full height for a wide source, full width for a
- * tall one — so the video always fills the canvas with no letterbox. A focus
- * near an edge keeps the window inside the frame (`clampCropWindow`), and a
- * focus at the source centre is a plain centre crop (the static-plan fallback).
+ * Native-resolution crop placement (Joya 2 — ZOOM PROHIBIDO).
+ *
+ * `scale` is ALWAYS 1.0: the crop window is taken from the source at native
+ * pixels (never larger than the source, never larger than the canvas) and
+ * positioned on the canvas; the blurred backdrop fills whatever is left. The
+ * window slides horizontally around `focusX` (the camera plan's subject
+ * focus) without ever exposing an out-of-frame edge.
  */
-export function coverCropWindow(
+export interface NativeCropLayout {
+  /** Always 1 — zero upscale, zero stretch (the tests pin `<= 1.0`). */
+  scale: number;
+  /** Native crop window over the source (source pixels). */
+  crop: CropWindow;
+  /** Placement of the crop on the canvas (canvas pixels). */
+  position: { x: number; y: number };
+  /** Placement size — always identical to `crop` (1:1 pixel mapping). */
+  box: { width: number; height: number };
+}
+
+/**
+ * The native crop layout of `source` inside `canvas`, centred on `focusX`
+ * (source pixels). The window is as large as the canvas allows WITHOUT
+ * upscaling (`min(canvas, source)` per dimension), so `scale` stays exactly
+ * 1.0 and the blur backdrop owns the rest of the canvas. A focus near a source
+ * edge keeps the window inside the frame (`clampCropWindow`); a focus at the
+ * source centre is a plain centre placement.
+ */
+export function nativeCropLayout(
   source: Readonly<{ width: number; height: number }>,
   canvas: Readonly<{ width: number; height: number }>,
   focusX: number,
-): CropWindow {
+): NativeCropLayout {
   if (!Number.isFinite(canvas.width) || !Number.isFinite(canvas.height) || canvas.width <= 0 || canvas.height <= 0) {
     throw new Error(
-      `coverCropWindow: canvas must have positive finite dimensions ` +
+      `nativeCropLayout: canvas must have positive finite dimensions ` +
         `(got ${String(canvas.width)}x${String(canvas.height)}).`,
     );
   }
-  const aspect = canvas.width / canvas.height;
-  let width = source.width;
-  let height = width / aspect;
-  if (height > source.height) {
-    height = source.height;
-    width = height * aspect;
-  }
-  return clampCropWindow(
+  const width = Math.min(canvas.width, source.width);
+  const height = Math.min(canvas.height, source.height);
+  const crop = clampCropWindow(
     { x: focusX - width / 2, y: (source.height - height) / 2, width, height },
     source,
   );
+  return {
+    scale: 1,
+    crop,
+    position: {
+      x: Math.round((canvas.width - crop.width) / 2),
+      y: Math.round((canvas.height - crop.height) / 2),
+    },
+    box: { width: crop.width, height: crop.height },
+  };
 }
 
 /**
@@ -154,61 +180,87 @@ export function resolveClipMedia(
 }
 
 /**
- * The sharp video layer cropped to `crop` (source pixels) and scaled to fill
- * `box`: the crop maps 1:1 onto the box and the rest of the frame falls
- * outside it. The wrapping box owns `overflow: hidden` — this renders only the
- * positioned, MUTE video (audio belongs to `Film`, never to a scene layer).
+ * The sharp video layer at NATIVE resolution: the video renders at its
+ * intrinsic pixel size (scale 1.0 — never stretched, never upscaled) and is
+ * offset so `crop` lands exactly on the `position` box. The wrapping box owns
+ * `overflow: hidden` — this renders only the positioned, MUTE video (audio
+ * belongs to `Film`, never to a scene layer).
  */
 export const CroppedVideo: React.FC<{
   src: string;
   source: Readonly<{ width: number; height: number }>;
   crop: Readonly<CropWindow>;
-  box: Readonly<{ width: number; height: number }>;
-}> = ({ src, source, crop, box }) => {
-  const scale =
-    crop.width > 0 && crop.height > 0 ? Math.max(box.width / crop.width, box.height / crop.height) : 1;
-  return (
+  position: Readonly<{ x: number; y: number }>;
+}> = ({ src, source, crop, position }) => (
+  <div
+    style={{
+      position: 'absolute',
+      left: position.x,
+      top: position.y,
+      width: crop.width,
+      height: crop.height,
+      overflow: 'hidden',
+    }}
+  >
     <OffthreadVideo
       src={src}
       muted
       style={{
         position: 'absolute',
-        width: source.width * scale,
-        height: source.height * scale,
-        left: -crop.x * scale,
-        top: -crop.y * scale,
+        width: source.width,
+        height: source.height,
+        left: -crop.x,
+        top: -crop.y,
         maxWidth: 'none',
       }}
     />
-  );
-};
+  </div>
+);
+
+/** One burned-in subtitle phrase, in seconds from the scene start. */
+export interface ClipSubtitleSegment {
+  text: string;
+  start: number;
+  end: number;
+}
 
 /**
- * Clip subtitles: the ONE active phrase of `scene.narration`, rendered as a
- * SIBLING overlay of the video crops (typography is never scaled or cropped by
- * the camera). Timing comes from the pure `subtitle-segments` module — the
- * narration is split into phrases by `buildSegments` and each phrase gets its
- * half-open frame window from `buildTimedSegments`; the window containing the
- * current frame renders. White-on-video styling with a brand keyline keeps the
- * copy readable over footage of any brightness.
+ * The subtitle segment on screen at `t` seconds (half-open `[start, end)`).
+ * Pure, so the segment selection is unit-testable.
+ */
+export function activeSubtitleSegmentAt(
+  segments: ReadonlyArray<ClipSubtitleSegment>,
+  t: number,
+): ClipSubtitleSegment | null {
+  let active: ClipSubtitleSegment | null = null;
+  for (const segment of segments) {
+    if (t >= segment.start && t < segment.end) active = segment;
+  }
+  return active;
+}
+
+/**
+ * Clip subtitles: the ONE active phrase of `scene.subtitleSegments` (whisper
+ * word timestamps clipped to the window), rendered as a SIBLING overlay of the
+ * video crops (typography is never scaled or cropped by the camera). The
+ * styling is publication-grade: heavy white type with a dark stroke plus a
+ * drop shadow and a soft scrim, always inside the vertical safe zone — and
+ * sized so it reads over footage of any brightness. A brand accent bar sits
+ * above the copy (the same keyline language as the crop frames).
  */
 export const ClipSubtitles: React.FC<{
-  text?: string;
-  /** Frames the narration voice occupies (the whole span of a trimmed clip). */
-  voiceSpanFrames: number;
+  segments: ReadonlyArray<ClipSubtitleSegment>;
   branding: FilmBranding;
   /** Bottom inset in px — keep the copy inside the vertical safe zone. */
   bottom: number;
-}> = ({ text, voiceSpanFrames, branding, bottom }) => {
+}> = ({ segments, branding, bottom }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-
-  if (!text?.trim()) return null;
-  const active = activeSegmentAt(buildTimedSegments(text, voiceSpanFrames), frame);
+  const active = activeSubtitleSegmentAt(segments, frame / fps);
   if (!active) return null;
 
   const enter = spring({
-    frame: frame - active.start,
+    frame: frame - Math.round(active.start * fps),
     fps,
     config: { damping: 18, mass: 0.6, stiffness: 170 },
     durationInFrames: 8,
@@ -240,24 +292,50 @@ export const ClipSubtitles: React.FC<{
       />
       <div
         style={{
+          padding: '10px 22px',
+          borderRadius: 16,
+          background: 'rgba(0, 0, 0, 0.38)',
           color: '#FFFFFF',
-          fontSize: 54,
+          fontSize: 48,
           fontWeight: 800,
-          lineHeight: 1.12,
+          lineHeight: 1.14,
           letterSpacing: -0.5,
           textAlign: 'center',
-          textShadow: '0 2px 10px rgba(0, 0, 0, 0.65), 0 0 32px rgba(0, 0, 0, 0.45)',
+          WebkitTextStroke: '1.5px rgba(0, 0, 0, 0.85)',
+          textShadow: '0 3px 12px rgba(0, 0, 0, 0.85), 0 0 28px rgba(0, 0, 0, 0.55)',
         }}
       >
-        {active.s}
+        {active.text}
       </div>
     </div>
   );
 };
 
 /**
- * `clip-vertical` — single-subject vertical clip: blurred cover backdrop,
- * sharp foreground with the animated crop window, safe-zoned subtitles.
+ * The subtitle segments of a scene: the whisper-derived window segments win;
+ * scenes without them fall back to the even narration timing so no clip is
+ * ever silent on screen.
+ */
+export function sceneSubtitleSegments(
+  scene: FilmScene,
+  spanDurationInFrames: number,
+  fps: number,
+): ClipSubtitleSegment[] {
+  if (scene.subtitleSegments && scene.subtitleSegments.length > 0) {
+    return [...scene.subtitleSegments];
+  }
+  if (!scene.narration?.trim() || spanDurationInFrames <= 0 || fps <= 0) return [];
+  return buildTimedSegments(scene.narration, spanDurationInFrames).map((segment) => ({
+    text: segment.s,
+    start: segment.start / fps,
+    end: segment.end / fps,
+  }));
+}
+
+/**
+ * `clip-vertical` — single-subject vertical clip: blurred backdrop, the sharp
+ * NATIVE crop window (zoom prohibited) with the brand keyline, safe-zoned
+ * burned-in subtitles.
  */
 export const ClipVertical: SceneRendererComponent = ({
   scene,
@@ -286,38 +364,58 @@ export const ClipVertical: SceneRendererComponent = ({
 
   // Crop x follows the directed camera: the focus point of the plan, mapped
   // from track-viewport space into source pixels. No track (or a plan resting
-  // at its centre) resolves to `source.width / 2` — a plain centre crop.
+  // at its centre) resolves to `source.width / 2` — a plain centre placement.
   const focusX =
     plan && track && track.viewport.width > 0
       ? (cameraFocusX(cameraAt(plan, frame), track.viewport) / track.viewport.width) * source.width
       : source.width / 2;
-  const crop = coverCropWindow(source, { width, height }, focusX);
+  const layout = nativeCropLayout(source, { width, height }, focusX);
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      {/* Blurred cover backdrop: the same clip scaled to cover, blurred and
-          dimmed (the overscan hides the blur bleeding at the edges). */}
+      {/* Blurred backdrop: the same clip at a SMALL raster scaled up (the blur
+          is cheap at 1/4 size), blurred and dimmed — it fills whatever the
+          native crop does not cover. */}
       <AbsoluteFill style={{ overflow: 'hidden' }}>
         <OffthreadVideo
           src={source.src}
           muted
           style={{
-            width: '100%',
-            height: '100%',
+            width: '25%',
+            height: '25%',
             objectFit: 'cover',
-            filter: 'blur(56px) brightness(0.55)',
-            transform: 'scale(1.15)',
+            filter: 'blur(12px) brightness(0.55)',
+            transform: 'scale(4.6)',
+            transformOrigin: 'center',
+            maxWidth: 'none',
           }}
         />
       </AbsoluteFill>
-      {/* Sharp foreground: the animated crop window over the source frame. */}
+      {/* Sharp foreground: the NATIVE crop window (scale 1.0) over the source. */}
       <AbsoluteFill style={{ overflow: 'hidden' }}>
-        <CroppedVideo src={source.src} source={source} crop={crop} box={{ width, height }} />
+        <CroppedVideo
+          src={source.src}
+          source={source}
+          crop={layout.crop}
+          position={layout.position}
+        />
       </AbsoluteFill>
+      {/* Brand keyline around the sharp window (same language as the duo). */}
+      <div
+        style={{
+          position: 'absolute',
+          left: layout.position.x,
+          top: layout.position.y,
+          width: layout.box.width,
+          height: layout.box.height,
+          border: `5px solid ${branding.accent}`,
+          boxSizing: 'border-box',
+          pointerEvents: 'none',
+        }}
+      />
       {/* Subtitles: SIBLING overlay, never a child of the crop layers. */}
       <ClipSubtitles
-        text={scene.narration}
-        voiceSpanFrames={span.durationInFrames}
+        segments={sceneSubtitleSegments(scene, span.durationInFrames, fps)}
         branding={branding}
         bottom={VERTICAL_SAFE_ZONES.bottom}
       />

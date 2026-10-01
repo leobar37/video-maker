@@ -26,7 +26,7 @@ export interface SubtitleWord {
  * (including `windowStart >= windowEnd`) yields `[]`.
  */
 export function clipWordsToWindow(
-  words: SubtitleWord[],
+  words: ReadonlyArray<SubtitleWord>,
   windowStart: number,
   windowEnd: number,
 ): SubtitleWord[] {
@@ -57,7 +57,7 @@ export function clipWordsToWindow(
  * Words whose text is empty contribute nothing and are skipped.
  */
 export function buildWordSegments(
-  words: SubtitleWord[],
+  words: ReadonlyArray<SubtitleWord>,
   maxChars = 30,
 ): Array<{ text: string; start: number; end: number }> {
   const segments: Array<{ text: string; start: number; end: number }> = [];

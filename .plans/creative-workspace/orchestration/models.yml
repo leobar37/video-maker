@@ -1,0 +1,12 @@
+# creative-workspace: modelos exactos verificados con omp models zai --json.
+# Fuente versionada; enlace en ~/code/dotfiles/omp/profiles/video-maker-studio.yml.
+setupVersion: 2
+modelRoles:
+  default: zai/glm-5.3:high
+  slow: zai/glm-5.3:high
+  plan: zai/glm-5.3:high
+  advisor: zai/glm-5.3:high
+  smol: zai/glm-5.3-flash:high
+  tiny: zai/glm-5.3-flash:high
+  commit: zai/glm-5.3-flash:high
+  vision: zai/glm-5.3-flash:high

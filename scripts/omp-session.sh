@@ -4,7 +4,6 @@
 # El goal se inyecta de una vez al inicio de la sesión (/goal set con el
 # objetivo de prompts/goal-objective.txt, que arranca con la keyword
 # "orchestrate").
-#
 # Uso:
 #   ./scripts/omp-session.sh                  # sesión con goal automático
 #   ./scripts/omp-session.sh "haz X"          # agrega una instrucción extra al prompt
@@ -12,13 +11,18 @@
 #   ./scripts/omp-session.sh --print          # imprime el prompt final sin invocar omp
 #
 # Variables:
-#   OMP_PROFILE   ruta al overlay (default: ~/code/dotfiles/omp/profiles/video-maker-plan.yml)
+#   OMP_PROFILE        overlay (default: ~/code/dotfiles/omp/profiles/video-maker-plan.yml)
+#   OMP_GOAL_FILE      objetivo /goal set (default: prompts/goal-objective.txt)
+#   OMP_BOOTSTRAP_FILE bootstrap de sesión (default: prompts/omp-session-bootstrap.md)
+# Ejemplos por initiative:
+#   OMP_GOAL_FILE=prompts/clip-goal-objective.txt \
+#   OMP_BOOTSTRAP_FILE=prompts/clip-session-bootstrap.md ./scripts/omp-session.sh
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROFILE="${OMP_PROFILE:-$HOME/code/dotfiles/omp/profiles/video-maker-plan.yml}"
-BOOTSTRAP_FILE="$REPO_ROOT/prompts/omp-session-bootstrap.md"
-GOAL_FILE="$REPO_ROOT/prompts/goal-objective.txt"
+BOOTSTRAP_FILE="${OMP_BOOTSTRAP_FILE:-$REPO_ROOT/prompts/omp-session-bootstrap.md}"
+GOAL_FILE="${OMP_GOAL_FILE:-$REPO_ROOT/prompts/goal-objective.txt}"
 
 PRINT_ONLY=0
 WITH_GOAL=1

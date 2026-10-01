@@ -124,6 +124,57 @@ function projectDirOf(ctx: CommandRunContext): string {
   return resolve(ctx.cwd, argString(ctx.args, 'project') ?? '.');
 }
 
+/** Defaults for `publish` read from `<project>/social-post.json` (optional). */
+interface SocialPostFile {
+  account?: string;
+  text?: string;
+  media?: string[];
+  tags?: string[];
+  idempotencyKey?: string;
+}
+
+/**
+ * Reads the publish defaults file. Missing file → undefined (flags rule).
+ * Present but invalid → throws with an actionable message.
+ */
+function readSocialPostFile(projectDir: string): SocialPostFile | undefined {
+  const path = join(projectDir, 'social-post.json');
+  if (!existsSync(path)) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    throw new Error(`social-post.json inválido en ${path}.`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`social-post.json inválido en ${path} (objeto esperado).`);
+  }
+  const record = parsed as Record<string, unknown>;
+  const strings = (key: string): string[] | undefined => {
+    const value = record[key];
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === 'string')) {
+      throw new Error(`social-post.json: "${key}" debe ser string[].`);
+    }
+    return value;
+  };
+  const text = (key: string): string | undefined => {
+    const value = record[key];
+    if (value === undefined) return undefined;
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new Error(`social-post.json: "${key}" debe ser string no vacío.`);
+    }
+    return value;
+  };
+  return {
+    account: text('account'),
+    text: text('text'),
+    media: strings('media'),
+    tags: strings('tags'),
+    idempotencyKey: text('idempotencyKey'),
+  };
+}
+
 /** run() MUST refuse to execute in plan mode (contract). */
 function refusePlanMode(ctx: CommandRunContext, verb: string): never {
   return ctx.fail(
@@ -783,20 +834,29 @@ export function buildMediaSpecs(deps: MediaCommandDeps = defaultMediaDeps()): Co
       } catch (error) {
         return ctx.fail(error instanceof MissingSpendCapError ? error.message : errorText(error));
       }
-      const account = argString(ctx.args, 'account');
-      const text = argString(ctx.args, 'text');
-      if (account === undefined || text === undefined) {
-        return ctx.fail('publish: --account and --text are required in run mode.');
+      const projectDir = projectDirOf(ctx);
+      let postFile: SocialPostFile | undefined;
+      try {
+        postFile = readSocialPostFile(projectDir);
+      } catch (error) {
+        return ctx.fail(`publish: ${errorText(error)}`);
       }
+      const account = argString(ctx.args, 'account') ?? postFile?.account;
+      const text = argString(ctx.args, 'text') ?? postFile?.text;
+      if (account === undefined || text === undefined) {
+        return ctx.fail('publish: --account and --text are required in run mode (o <project>/social-post.json).');
+      }
+      const tags = argList(ctx.args, 'tags') ?? postFile?.tags;
       try {
         const result = await runPublish({
-          projectDir: projectDirOf(ctx),
+          projectDir,
           deps,
           account,
           text,
-          media: argList(ctx.args, 'media') ?? [],
+          media: argList(ctx.args, 'media') ?? postFile?.media ?? [],
           idempotencyKey:
             argString(ctx.args, 'idempotency-key') ??
+            postFile?.idempotencyKey ??
             `publish:${account}:${text.slice(0, 32)}`,
           spendCapUsd,
           force: argBoolean(ctx.args, 'force', false),
@@ -805,7 +865,7 @@ export function buildMediaSpecs(deps: MediaCommandDeps = defaultMediaDeps()): Co
           ...(argString(ctx.args, 'schedule') !== undefined
             ? { scheduledFor: argString(ctx.args, 'schedule') }
             : {}),
-          ...(argList(ctx.args, 'tags') !== undefined ? { tags: argList(ctx.args, 'tags') } : {}),
+          ...(tags !== undefined ? { tags } : {}),
         });
         return { exitCode: result.exitCode };
       } catch (error) {

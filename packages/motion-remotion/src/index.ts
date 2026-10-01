@@ -22,6 +22,7 @@ export * from './Film';
 export * from './PhoneMock';
 export * from './SceneRenderer';
 export * from './subtitle-segments';
+export * from './subtitle-words';
 export * from './Subtitles';
 export * from './types';
 

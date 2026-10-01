@@ -9,8 +9,8 @@
  * remote sources (YouTube URLs) are rejected with an actionable error because
  * `yt-dlp` is not wired in this part (plan: local file required).
  */
-import { createReadStream } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 
 import { isRecord, type Project, type SceneConfig } from '@videomaker/core';
@@ -19,12 +19,13 @@ import type { Viewport } from '@videomaker/motion-core';
 // barrel does not export it and its `exports` map blocks subpaths, so it is
 // consumed through a relative import (the demo project's kit seam precedent).
 import { framesToInteractions } from '../../../motion-core/src/face-track';
-import type { FilmProps, FilmScene } from '@videomaker/motion-remotion';
+import { buildWordSegments, clipWordsToWindow, type FilmProps, type FilmScene } from '@videomaker/motion-remotion';
 import type { FfmpegRunner } from '@videomaker/motion-remotion/loudness';
 import type { ProcessRunner } from '@videomaker/providers';
 import {
   FRAME_ID_PATTERN,
   SCORING_SIGNALS,
+  ClipSocialSchema,
   type BBox,
   type ClipBreakdown,
   type ClipFace,
@@ -33,6 +34,8 @@ import {
   type FrameAnalysis,
   type ScoringWeightValues,
 } from '@videomaker/schemas';
+
+import type { AgentQuestion } from './agent';
 
 import { buildFilmProps, ffmpegStderrDetail, projectAbsolute } from './assemble';
 
@@ -104,10 +107,17 @@ export interface ClipFramesOptions {
   shardSize?: number;
   /** Context frames carried from the previous shard (default 5). */
   contextFrames?: number;
+  /** yt-dlp binary used for remote `srcPath` (default `yt-dlp` on PATH). */
+  ytdlpBin?: string;
 }
 
 const URL_PATTERN = /^https?:\/\//i;
 const PROJECT_FRAMES_DIR = 'clips/frames';
+
+/** True for remote `http(s)` sources, fetched with yt-dlp before probing. */
+export function isRemoteSource(src: string): boolean {
+  return URL_PATTERN.test(src);
+}
 
 /**
  * Deterministic sample list: one frame each `frameEverySeconds` starting at
@@ -311,6 +321,60 @@ export async function probeSource(process: ProcessRunner, srcPath: string): Prom
 }
 
 /**
+ * Fetch a remote source with yt-dlp into `<projectDir>/clips/source.mp4` — the
+ * canonical project source that `clip-transcribe` consumes by default. Returns
+ * the local path; local files never reach this function (`runClipFrames` uses
+ * them as-is).
+ */
+export async function downloadClipSource(
+  process: ProcessRunner,
+  projectDir: string,
+  url: string,
+  options?: { ytdlpBin?: string },
+): Promise<string> {
+  if (!isRemoteSource(url)) {
+    throw new Error(`downloadClipSource: expected an http(s) URL, got "${url}".`);
+  }
+  const bin = options?.ytdlpBin ?? 'yt-dlp';
+  await mkdir(join(projectDir, 'clips'), { recursive: true });
+  const target = join(projectDir, 'clips', 'source.mp4');
+  const result = await process.run(bin, [
+    '--no-playlist',
+    // Re-running `clip-frames --src <url>` must REFRESH the project source:
+    // yt-dlp otherwise skips an existing output file (stale quality).
+    '--force-overwrites',
+    // YouTube needs a JS runtime for stream URLs (yt-dlp EJS); bun is the
+    // repo's own runtime and is always on PATH here.
+    '--js-runtimes',
+    'bun',
+    // 1080p video-only + separate audio, merged to mp4. The selector NEVER
+    // falls back to the muxed 360p "format 18": video+audio streams are the
+    // floor, so the sharp source the native crop needs is guaranteed.
+    '-f',
+    'bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio',
+    '--merge-output-format',
+    'mp4',
+    '-o',
+    target,
+    url,
+  ]);
+  if (result.code !== 0) {
+    throw new Error(
+      `${bin} failed for ${url} (exit ${result.code}): ${result.stderr.slice(-300)}`,
+    );
+  }
+  try {
+    await stat(target);
+  } catch (cause) {
+    throw new Error(
+      `${bin} reported success but ${target} is missing — check the URL and the yt-dlp options.`,
+      { cause },
+    );
+  }
+  return target;
+}
+
+/**
  * Thin `clip-frames` runner: probes the source into `clips/source.json`,
  * extracts one jpg per sampled time at `clips/frames/f-%06d.jpg`, then writes
  * `clips/frames.json` and `clips/shards.json`. All ffmpeg invocations live
@@ -324,7 +388,12 @@ export async function runClipFrames(
   if (typeof projectDir !== 'string' || projectDir.trim() === '') {
     throw new Error('runClipFrames: projectDir must be a non-empty path.');
   }
-  const probe = await probeSource(process, options.srcPath);
+  const srcPath = isRemoteSource(options.srcPath)
+    ? await downloadClipSource(process, projectDir, options.srcPath, {
+        ytdlpBin: options.ytdlpBin,
+      })
+    : options.srcPath;
+  const probe = await probeSource(process, srcPath);
   const frames: FramesManifest = {
     schemaVersion: 1,
     frames: sampleFrames({
@@ -341,7 +410,8 @@ export async function runClipFrames(
     `${JSON.stringify(
       {
         schemaVersion: 1,
-        path: options.srcPath,
+        path: srcPath,
+        ...(isRemoteSource(options.srcPath) ? { sourceUrl: options.srcPath } : {}),
         durationSeconds: probe.durationSeconds,
         width: probe.width,
         height: probe.height,
@@ -359,7 +429,7 @@ export async function runClipFrames(
       '-ss',
       String(frame.t),
       '-i',
-      options.srcPath,
+      srcPath,
       '-frames:v',
       '1',
       '-q:v',
@@ -368,7 +438,7 @@ export async function runClipFrames(
     ]);
     if (result.code !== 0) {
       throw new Error(
-        `ffmpeg failed extracting ${frame.frame_id} (t=${frame.t}) from ${options.srcPath}: ` +
+        `ffmpeg failed extracting ${frame.frame_id} (t=${frame.t}) from ${srcPath}: ` +
           result.stderr.slice(-300),
       );
     }
@@ -1666,6 +1736,8 @@ export interface ClipDashboardCard {
   end: number;
   frameIds: string[];
   stillPath?: string;
+  /** Dashboard-relative path of the rendered clip (player only when set). */
+  videoPath?: string;
 }
 
 function escapeHtml(raw: string): string {
@@ -1677,39 +1749,52 @@ function escapeHtml(raw: string): string {
 }
 
 /**
- * Standalone read-only dashboard HTML (`clips/dashboard/index.html`): one card
- * per clip with the still (relative image path), title, description,
- * hashtags, score, layout, status and the range's `frame_ids`. Pure and
- * offline: inline CSS only, zero external resource references (no CDN, no
- * scripts) and every user-controlled string HTML-escaped. `header` sets the
- * page title and headline.
+ * Standalone read-only dashboard HTML (`clips/dashboard/index.html`): a GRID of
+ * compact clip cards (many per row) with a sticky filter toolbar (status,
+ * layout, only-rendered, ordering) implemented in CSS ONLY via `:has()` +
+ * radio/checkbox state, so the page keeps its contract: pure and offline,
+ * inline CSS, zero external resource references and no scripts at all. Every
+ * user-controlled string is HTML-escaped. Rendered clips sort first (they are
+ * the work under review); the default chip shows the approved set.
  */
 export function renderClipsDashboard(input: {
   cards: ClipDashboardCard[];
   header?: string;
 }): string {
   const header = input.header ?? 'Clip dashboard';
-  const cards = input.cards
+  // Rendered clips first (those are the ones to review, newest work on top),
+  // then approved, then the rest by score. The filter chips sort again by
+  // score/time through the CSS `order` property.
+  const ordered = [...input.cards].sort((a, b) => {
+    const rank = (card: ClipDashboardCard): number =>
+      card.videoPath ? 0 : card.status === 'approved' ? 1 : 2;
+    return rank(a) - rank(b) || b.score - a.score;
+  });
+  const approvedCount = input.cards.filter((card) => card.status === 'approved').length;
+  const withVideoCount = input.cards.filter((card) => card.videoPath !== undefined).length;
+  const cards = ordered
     .map((card) => {
-      const still = card.stillPath
-        ? `<img loading="lazy" src="${escapeHtml(card.stillPath)}" alt="still ${escapeHtml(card.id)}">`
-        : '';
+      // The dashboard lives at `clips/dashboard/index.html` and renders land at
+      // `renders/clips/<id>.mp4`: callers pass the relative `videoPath` for
+      // clips that EXIST (approved + rendered). Cards without one show the
+      // still — a player pointing at a 404 is worse than a poster.
+      const media = card.videoPath
+        ? `<video controls preload="none" src="${escapeHtml(card.videoPath)}"` +
+          `${card.stillPath ? ` poster="${escapeHtml(card.stillPath)}"` : ''}></video>`
+        : card.stillPath
+          ? `<img loading="lazy" src="${escapeHtml(card.stillPath)}" alt="still ${escapeHtml(card.id)}">`
+          : '';
       const hashtags = card.hashtags
-        .map((hashtag) => `<li>#${escapeHtml(hashtag)}</li>`)
+        .map((hashtag) => `<li>#${escapeHtml(hashtag.replace(/^#+/, ''))}</li>`)
         .join('');
-      const frameIds = card.frameIds
-        .map((frameId) => `<li><code>${escapeHtml(frameId)}</code></li>`)
-        .join('');
-      return `<article class="card">
+      return `<article class="card" data-status="${escapeHtml(card.status)}" data-layout="${escapeHtml(card.layout)}" data-video="${card.videoPath ? '1' : '0'}" style="--o-score:${Math.round(-card.score * 100000)};--o-time:${Math.round(card.start)}">
 <h2>${escapeHtml(card.title)}</h2>
 <p class="meta">id ${escapeHtml(card.id)} · <span class="status">${escapeHtml(card.status)}</span> ·
 layout ${escapeHtml(card.layout)} · score ${escapeHtml(String(card.score))} ·
 ${escapeHtml(String(card.start))}s to ${escapeHtml(String(card.end))}s</p>
-${still}
+${media}
 <p class="description">${escapeHtml(card.description)}</p>
 <ul class="hashtags">${hashtags}</ul>
-<h3>frame_ids</h3>
-<ul class="frames">${frameIds}</ul>
 </article>`;
     })
     .join('\n');
@@ -1717,15 +1802,54 @@ ${still}
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(header)}</title>
-<style>body{font-family:system-ui,sans-serif;max-width:960px;margin:auto;padding:24px;background:#111;color:#eee}
-.card{border:1px solid #444;border-radius:12px;padding:16px;margin:16px 0;background:#1a1a1a}
-.meta{color:#aaa}.status{font-size:.8em;color:#9cf}.description{white-space:pre-wrap}
-.hashtags li{display:inline-block;margin:0 6px 0 0;color:#9cf}.frames li{margin:2px 0}
-code{color:#cec}img{max-width:100%;border-radius:8px}.empty{color:#888}</style>
+<style>*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;max-width:1700px;margin:auto;padding:12px 16px;background:#111;color:#eee}
+h1{font-size:1.15rem;margin:0 0 2px}.sub{color:#888;font-size:.8em;margin:0 0 8px}
+.filters{position:sticky;top:0;z-index:3;background:#111;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0 10px;border-bottom:1px solid #333;margin-bottom:12px}
+.filters .lbl{color:#777;font-size:.75em;margin:0 2px}
+.chip{display:inline-flex;align-items:center;border:1px solid #3a3a3a;border-radius:999px;padding:2px 10px;font-size:.78em;color:#bbb;cursor:pointer;background:#191919}
+.chip input{position:absolute;opacity:0;width:0;height:0}
+.chip:has(input:checked){border-color:#9cf;color:#9cf;background:#12202b}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;align-items:start}
+.card{border:1px solid #444;border-radius:12px;padding:10px;background:#1a1a1a;min-width:0}
+.card h2{font-size:.9rem;margin:0 0 2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{color:#aaa;font-size:.7em;margin:0 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.status{color:#9cf}
+video,img{display:block;margin:8px auto;width:auto;height:auto;max-width:100%;max-height:240px;aspect-ratio:9/16;object-fit:cover;background:#000;border-radius:8px}
+.description{font-size:.78em;color:#ccc;margin:6px 0 2px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.hashtags{list-style:none;padding-left:0;margin:4px 0 0;color:#9cf;font-size:.72em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hashtags li{display:inline;margin:0 5px 0 0}
+.empty{color:#888}
+/* CSS-only filters (no scripts): radio/checkbox state read through :has(). */
+body:has(#st-approved:checked) .card:not([data-status=approved]){display:none}
+body:has(#st-rejected:checked) .card:not([data-status=rejected]){display:none}
+body:has(#st-candidate:checked) .card:not([data-status=candidate]){display:none}
+body:has(#ly-duo:checked) .card:not([data-layout=duo]){display:none}
+body:has(#ly-single:checked) .card:not([data-layout=single]){display:none}
+body:has(#only-render:checked) .card:not([data-video="1"]){display:none}
+body:has(#sort-score:checked) .card{order:var(--o-score)}
+body:has(#sort-time:checked) .card{order:var(--o-time)}</style>
 </head><body>
 <h1>${escapeHtml(header)}</h1>
-<p>${input.cards.length} clips · read-only</p>
+<p class="sub">${input.cards.length} clips · ${approvedCount} approved · ${withVideoCount} rendered · read-only</p>
+<div class="filters">
+<span class="lbl">Ver:</span>
+<label class="chip"><input type="radio" name="st" id="st-all"><span>Todos</span></label>
+<label class="chip"><input type="radio" name="st" id="st-approved" checked><span>Aprobados</span></label>
+<label class="chip"><input type="radio" name="st" id="st-rejected"><span>Rechazados</span></label>
+<label class="chip"><input type="radio" name="st" id="st-candidate"><span>Candidatos</span></label>
+<span class="lbl">tipo:</span>
+<label class="chip"><input type="radio" name="ly" id="ly-all" checked><span>Ambos</span></label>
+<label class="chip"><input type="radio" name="ly" id="ly-duo"><span>Dúo</span></label>
+<label class="chip"><input type="radio" name="ly" id="ly-single"><span>Single</span></label>
+<label class="chip"><input type="checkbox" id="only-render"><span>Solo con render</span></label>
+<span class="lbl">orden:</span>
+<label class="chip"><input type="radio" name="so" id="so-default" checked><span>Por defecto</span></label>
+<label class="chip"><input type="radio" name="so" id="sort-score"><span>Score ↓</span></label>
+<label class="chip"><input type="radio" name="so" id="sort-time"><span>Inicio ↑</span></label>
+</div>
+<div class="grid">
 ${cards || '<p class="empty">No clips yet.</p>'}
+</div>
 </body></html>`;
 }
 
@@ -1913,6 +2037,8 @@ export interface ClipSceneFacts {
   range: ClipRange;
   /** Every validated `clips/analysis` frame (the track source). */
   analyses: readonly FrameAnalysis[];
+  /** Whisper `word_timestamps` on the SOURCE clock (burned-in subtitles). */
+  words: readonly ClipWord[];
   /** Intrinsic source frame size (crop math + track viewport). */
   sourceSize: { width: number; height: number };
   /** publicDir-relative staged video (staticFile target). */
@@ -1993,8 +2119,610 @@ function applyClipSceneFields(
   scene.mediaDurationSeconds = clipSeconds;
   scene.mediaWidth = facts.sourceSize.width;
   scene.mediaHeight = facts.sourceSize.height;
+  // Burned-in subtitles: whisper `word_timestamps` clipped to the clip window
+  // and packed into phrases, REBASED to the clip clock (the plan: subs come
+  // from `subtitle-words`, never from evenly-split narration text).
+  scene.subtitleSegments = buildWordSegments(
+    clipWordsToWindow(facts.words, facts.range.start, facts.range.end),
+  ).map((segment) => ({
+    text: segment.text,
+    start: segment.start - facts.range.start,
+    end: segment.end - facts.range.start,
+  }));
   scene.track = {
     viewport,
     interactions: framesToInteractions(framesInRange, viewport, CLIP_FILM_FPS),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Part 6/6 — dense keyframes + window shards (the `--keys` pass)
+//
+// Two-level sampling from the plan: the first pass lays a sparse grid, and
+// `--keys` densifies ONLY inside the proposed candidate windows (± margin) at
+// `keyFps`, marking those frames `rol: 'key'` (vision-analyzed) and the rest
+// `rol: 'base'` (context only). When proposals exist, shards become WINDOWS —
+// the plan's unit of analysis (one window = one vision call) — ordered by the
+// cheap transcript `preScore` so `--max-shards` always spends on the best
+// windows first. Without proposals the block shards of part 1/4 stay valid.
+// ---------------------------------------------------------------------------
+
+/** Options of the pure dense-sampling step. */
+export interface KeyFramesOptions {
+  durationSeconds: number;
+  fps: number;
+  /** Frames already sampled by the first pass (re-marked, never dropped). */
+  frames: FrameEntry[];
+  /** Proposed candidate windows to densify (from `clips/proposals.json`). */
+  windows: ProposedWindow[];
+  /** Dense samples per second inside window bodies (default 1). */
+  keyFps?: number;
+  /** Seconds of context margin around each window body (default 5). */
+  keyMargin?: number;
+}
+
+/**
+ * Deterministic dense sample list: the existing frames PLUS one sample per
+ * `1 / keyFps` seconds across every window `[start - keyMargin, end + keyMargin]`
+ * (clamped to the source). The merged list is deduped by `t` (half-frame),
+ * renumbered `f-<6 digits>` in `t` order and re-marked: `rol: 'key'` inside a
+ * window BODY, `rol: 'base'` otherwise (margins and untouched regions).
+ */
+export function sampleKeyFrames(options: KeyFramesOptions): FrameEntry[] {
+  const { durationSeconds, fps, frames, windows } = options;
+  const keyFps = options.keyFps ?? 1;
+  const keyMargin = options.keyMargin ?? 5;
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    throw new Error(
+      `sampleKeyFrames: durationSeconds must be a positive finite number, got ${durationSeconds}.`,
+    );
+  }
+  if (!Number.isFinite(fps) || fps <= 0) {
+    throw new Error(`sampleKeyFrames: fps must be a positive finite number, got ${fps}.`);
+  }
+  if (!Number.isFinite(keyFps) || keyFps <= 0) {
+    throw new Error(`sampleKeyFrames: keyFps must be a positive finite number, got ${keyFps}.`);
+  }
+  if (!Number.isFinite(keyMargin) || keyMargin < 0) {
+    throw new Error(`sampleKeyFrames: keyMargin must be a finite number >= 0, got ${keyMargin}.`);
+  }
+  const bodyRanges: Array<[number, number]> = [];
+  const dense: number[] = [];
+  for (const window of windows) {
+    if (!Number.isFinite(window.start) || !Number.isFinite(window.end) || window.end <= window.start) {
+      throw new Error(
+        `sampleKeyFrames: window ${window.id} must have start < end (finite seconds), ` +
+          `got start=${window.start}, end=${window.end}.`,
+      );
+    }
+    bodyRanges.push([window.start, window.end]);
+    const denseStart = Math.max(0, window.start - keyMargin);
+    const denseEnd = Math.min(durationSeconds, window.end + keyMargin);
+    const step = 1 / keyFps;
+    // Aligned to the GLOBAL tick grid (multiples of 1/keyFps): overlapping
+    // windows share exact sample times, so their union dedupes cleanly below
+    // instead of interleaving differently-phased grids.
+    const firstTick = Math.ceil(denseStart * keyFps - 1e-9) / keyFps;
+    for (let t = firstTick; t < denseEnd; t += step) dense.push(t);
+    if (denseEnd < durationSeconds) dense.push(Math.ceil(denseEnd * keyFps - 1e-9) / keyFps);
+  }
+  for (const frame of frames) {
+    if (!Number.isFinite(frame.t) || frame.t < 0) {
+      throw new Error(`sampleKeyFrames: frame ${frame.frame_id} has invalid t ${frame.t}.`);
+    }
+  }
+  const candidates = [...frames.map((frame) => frame.t), ...dense];
+  candidates.sort((a, b) => a - b);
+  // Collapse near-duplicates within half a dense tick (or half a video frame):
+  // overlapping windows would otherwise leave phase-shifted twins behind.
+  const minGap = Math.max(0.5 / fps, 0.5 / keyFps);
+  const times: number[] = [];
+  for (const t of candidates) {
+    if (t >= durationSeconds) continue;
+    const last = times[times.length - 1];
+    if (last === undefined || t - last >= minGap) times.push(t);
+  }
+  return times.map((t, index): FrameEntry => {
+    const frame_id = `f-${String(index + 1).padStart(6, '0')}`;
+    const inBody = bodyRanges.some(([start, end]) => t >= start && t <= end);
+    return {
+      frame_id,
+      t,
+      path: `${PROJECT_FRAMES_DIR}/${frame_id}.jpg`,
+      rol: inBody ? 'key' : 'base',
+    };
+  });
+}
+
+/**
+ * Window shards (the plan's analysis unit): one shard per proposed window that
+ * covers at least one `key` frame. The shard's analyzable set is the window
+ * body's key frames; `keyMargin` base frames around the body ride along as
+ * `contextOnlyFrameIds`. Shards are ordered by the window `preScore` descending
+ * (ties: `start` ascending) so `--max-shards` caps spend on the best windows
+ * first. `shardSize` is `0`: window shards vary in size by construction.
+ */
+export function buildWindowShards(
+  frames: FrameEntry[],
+  windows: ProposedWindow[],
+  options?: { keyMargin?: number },
+): ShardsManifest {
+  const keyMargin = options?.keyMargin ?? 5;
+  if (!Number.isFinite(keyMargin) || keyMargin < 0) {
+    throw new Error(`buildWindowShards: keyMargin must be a finite number >= 0, got ${keyMargin}.`);
+  }
+  const ordered = [...windows].sort(
+    (a, b) => b.preScore - a.preScore || a.start - b.start || a.id.localeCompare(b.id),
+  );
+  const shards: ShardEntry[] = [];
+  for (const window of ordered) {
+    const denseStart = Math.max(0, window.start - keyMargin);
+    const denseEnd = window.end + keyMargin;
+    const body = frames.filter(
+      (frame) => frame.rol === 'key' && frame.t >= window.start && frame.t <= window.end,
+    );
+    if (body.length === 0) continue;
+    const bodyIds = new Set(body.map((frame) => frame.frame_id));
+    const contextOnlyFrameIds = frames
+      .filter(
+        (frame) =>
+          !bodyIds.has(frame.frame_id) && frame.t >= denseStart && frame.t <= denseEnd,
+      )
+      .map((frame) => frame.frame_id);
+    shards.push({
+      id: `shard-${String(shards.length + 1).padStart(3, '0')}`,
+      frameIds: [...contextOnlyFrameIds, ...body.map((frame) => frame.frame_id)],
+      contextOnlyFrameIds,
+      prevSummary: '',
+    });
+  }
+  return { schemaVersion: 1, shardSize: 0, shards };
+}
+
+/** Options of the `--keys` thin runner. */
+export interface ClipKeysOptions {
+  /** Proposed windows to densify (from `clips/proposals.json`). */
+  windows: ProposedWindow[];
+  /** Dense samples per second inside window bodies (default 1). */
+  keyFps?: number;
+  /** Seconds of context margin around each window body (default 5). */
+  keyMargin?: number;
+}
+
+/**
+ * Thin `clip-frames --keys` runner: densifies `clips/frames.json` inside the
+ * proposed windows (extracting only the jpgs that do not exist yet), re-marks
+ * frame roles and rewrites `clips/shards.json` as WINDOW shards.
+ */
+export async function runClipFramesKeys(
+  process: ProcessRunner,
+  projectDir: string,
+  options: ClipKeysOptions,
+): Promise<{ frames: FramesManifest; shards: ShardsManifest }> {
+  const sourceRaw = await readFile(join(projectDir, 'clips', 'source.json'), 'utf8').catch(() => {
+    throw new Error('runClipFramesKeys: clips/source.json is missing — run clip-frames first.');
+  });
+  const framesRaw = await readFile(join(projectDir, 'clips', 'frames.json'), 'utf8').catch(() => {
+    throw new Error('runClipFramesKeys: clips/frames.json is missing — run clip-frames first.');
+  });
+  const source = JSON.parse(sourceRaw) as Record<string, unknown>;
+  const existing = JSON.parse(framesRaw) as FramesManifest;
+  const durationSeconds = Number(source.durationSeconds);
+  const fps = Number(source.fps);
+  const srcPath = String(source.path ?? '');
+  if (!Number.isFinite(durationSeconds) || !Number.isFinite(fps) || srcPath === '') {
+    throw new Error('runClipFramesKeys: clips/source.json has no usable duration/fps/path.');
+  }
+  const frames: FramesManifest = {
+    schemaVersion: 1,
+    frames: sampleKeyFrames({
+      durationSeconds,
+      fps,
+      frames: existing.frames,
+      windows: options.windows,
+      keyFps: options.keyFps,
+      keyMargin: options.keyMargin,
+    }),
+  };
+  const shards = buildWindowShards(frames.frames, options.windows, {
+    keyMargin: options.keyMargin,
+  });
+  await mkdir(join(projectDir, PROJECT_FRAMES_DIR), { recursive: true });
+  for (const frame of frames.frames) {
+    const output = join(projectDir, frame.path);
+    if (existsSync(output)) continue;
+    const result = await process.run('ffmpeg', [
+      '-y',
+      '-ss',
+      String(frame.t),
+      '-i',
+      srcPath,
+      '-frames:v',
+      '1',
+      '-q:v',
+      '2',
+      output,
+    ]);
+    if (result.code !== 0) {
+      throw new Error(
+        `ffmpeg failed extracting ${frame.frame_id} (t=${frame.t}) from ${srcPath}: ` +
+          result.stderr.slice(-300),
+      );
+    }
+  }
+  await writeFile(join(projectDir, 'clips', 'frames.json'), `${JSON.stringify(frames, null, 2)}\n`);
+  await writeFile(join(projectDir, 'clips', 'shards.json'), `${JSON.stringify(shards, null, 2)}\n`);
+  return { frames, shards };
+}
+
+// ---------------------------------------------------------------------------
+// Part 7/7 — agent self-review (`clip-ranges --review`)
+//
+// The plan's two-pass auto-review: the same agent backend runs as CRITIC over
+// the candidates (rubric: bounds, layout↔faces, real hook, complete social, no
+// overlaps), the generator applies the fixes and journals every round in
+// `revisions[]`. At most `REVIEW_MAX_ROUNDS` rounds; the deterministic checks
+// below never coerce — invalid patches are ignored and recorded as such.
+// ---------------------------------------------------------------------------
+
+/** Suggested fix for one candidate from the critic. */
+export interface CriticPatch {
+  start?: number;
+  end?: number;
+  social?: ClipSocial;
+  discard?: boolean;
+}
+
+/** One critic verdict per candidate id. */
+export interface CriticVerdict {
+  id: string;
+  verdict: 'pass' | 'revise';
+  issues?: string[];
+  patch?: CriticPatch;
+}
+
+/** Critic response envelope (raw JSON text from `AgentRunner.decide`). */
+export interface CriticResponse {
+  verdicts: CriticVerdict[];
+}
+
+/** Hard cap of self-review rounds (plan: "máx 2 rondas"). */
+export const REVIEW_MAX_ROUNDS = 2;
+
+/** The plan rubric, as numbered questions for `AgentRunner.decide`. */
+export const REVIEW_RUBRIC: AgentQuestion[] = [
+  {
+    id: 'bounds',
+    prompt:
+      'Bounds: every range must satisfy 0 <= start < end <= the source duration. ' +
+      'Report violations and fix them with patch.start / patch.end.',
+  },
+  {
+    id: 'layout-faces',
+    prompt:
+      'Layout vs faces: layout "duo" requires exactly 2 faces, "single" never forces a ' +
+      'duo. Report inconsistencies as issues (never change layout or faces here).',
+  },
+  {
+    id: 'hook',
+    prompt:
+      'Hook: the first seconds of each range must contain a real hook in the provided ' +
+      'transcript slice. Ranges without one: move patch.start to the nearest hook or discard.',
+  },
+  {
+    id: 'social',
+    prompt:
+      'Social copy: title, description and hashtags must be complete and match the ' +
+      'objective. Fix weak copy with patch.social {title, description, hashtags[]}.',
+  },
+  {
+    id: 'overlaps',
+    prompt:
+      'Overlaps: ranges must not overlap each other. Keep the higher-scoring one; adjust ' +
+      'the weaker with patch.start / patch.end or discard it.',
+  },
+];
+
+/** Response shape instructions prepended to the critic state. */
+export const REVIEW_RESPONSE_CONTRACT =
+  'Respond ONLY with JSON: {"verdicts":[{"id":"clip-01","verdict":"pass"|"revise",' +
+  '"issues":["..."],"patch":{"start":1.2,"end":9.8,"discard":false,' +
+  '"social":{"title":"...","description":"...","hashtags":["..."]}}}]}';
+
+function criticIssue(message: string): never {
+  throw new Error(
+    `parseCriticResponse: ${message} — expected ${REVIEW_RESPONSE_CONTRACT}`,
+  );
+}
+
+/**
+ * Parses the critic's raw reply (plain JSON or a single markdown code fence).
+ * Garbage is rejected with the expected contract — never coerced.
+ */
+export function parseCriticResponse(text: string): CriticResponse {
+  let raw = text.trim();
+  const fenced = /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i.exec(raw);
+  if (fenced !== null && fenced[1] !== undefined) raw = fenced[1].trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return criticIssue('reply is not valid JSON');
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return criticIssue('reply is not a JSON object');
+  }
+  const record = parsed as Record<string, unknown>;
+  if (!Array.isArray(record.verdicts)) criticIssue('missing "verdicts" array');
+  const verdicts: CriticVerdict[] = [];
+  for (const item of record.verdicts as unknown[]) {
+    if (typeof item !== 'object' || item === null) criticIssue('verdict entry is not an object');
+    const entry = item as Record<string, unknown>;
+    if (typeof entry.id !== 'string' || entry.id === '') {
+      criticIssue('verdict entry needs a non-empty string "id"');
+    }
+    if (entry.verdict !== 'pass' && entry.verdict !== 'revise') {
+      criticIssue(`verdict for ${entry.id} must be "pass" or "revise"`);
+    }
+    if (entry.issues !== undefined) {
+      if (
+        !Array.isArray(entry.issues) ||
+        entry.issues.some((issue) => typeof issue !== 'string')
+      ) {
+        criticIssue(`verdict for ${entry.id} has non-string "issues"`);
+      }
+    }
+    let patch: CriticPatch | undefined;
+    if (entry.patch !== undefined) {
+      if (typeof entry.patch !== 'object' || entry.patch === null) {
+        criticIssue(`verdict for ${entry.id} has a non-object "patch"`);
+      }
+      const raw = entry.patch as Record<string, unknown>;
+      patch = {};
+      if (raw.start !== undefined) {
+        if (typeof raw.start !== 'number') criticIssue(`patch.start for ${entry.id} must be a number`);
+        patch.start = raw.start;
+      }
+      if (raw.end !== undefined) {
+        if (typeof raw.end !== 'number') criticIssue(`patch.end for ${entry.id} must be a number`);
+        patch.end = raw.end;
+      }
+      if (raw.discard !== undefined) {
+        if (typeof raw.discard !== 'boolean') {
+          criticIssue(`patch.discard for ${entry.id} must be a boolean`);
+        }
+        patch.discard = raw.discard;
+      }
+      if (raw.social !== undefined) {
+        const social = ClipSocialSchema.safeParse(raw.social);
+        if (!social.success) {
+          criticIssue(`patch.social for ${entry.id} is not a valid ClipSocial`);
+        }
+        patch.social = social.data;
+      }
+    }
+    verdicts.push({
+      id: entry.id,
+      verdict: entry.verdict,
+      ...(Array.isArray(entry.issues) ? { issues: entry.issues as string[] } : {}),
+      ...(patch !== undefined ? { patch } : {}),
+    });
+  }
+  return { verdicts };
+}
+
+/**
+ * Applies one review round (pure, deterministic, no coercion): valid patches
+ * land, invalid ones are ignored and journaled as such, discards drop the
+ * candidate and every surviving verdict appends a `revisions[]` entry. Inputs
+ * are never mutated.
+ */
+export function applyCriticVerdicts(
+  candidates: ClipRange[],
+  verdicts: CriticVerdict[],
+  round: number,
+  limits?: { durationSeconds?: number },
+): ClipRange[] {
+  if (!Number.isInteger(round) || round < 1) {
+    throw new Error(`applyCriticVerdicts: round must be a positive integer, got ${round}.`);
+  }
+  const verdictById = new Map<string, CriticVerdict>();
+  for (const verdict of verdicts) verdictById.set(verdict.id, verdict);
+  const kept: ClipRange[] = [];
+  for (const candidate of candidates) {
+    const verdict = verdictById.get(candidate.id);
+    if (verdict === undefined) {
+      kept.push({ ...candidate });
+      continue;
+    }
+    const issues = [...(verdict.issues ?? [])];
+    if (verdict.patch?.discard === true) continue;
+    const next: ClipRange = { ...candidate };
+    let changed = false;
+    const patch = verdict.patch ?? {};
+    if (patch.start !== undefined) {
+      if (
+        Number.isFinite(patch.start) &&
+        patch.start >= 0 &&
+        patch.start < next.end &&
+        (limits?.durationSeconds === undefined || patch.start <= limits.durationSeconds)
+      ) {
+        next.start = patch.start;
+        changed = true;
+      } else {
+        issues.push(`ignored invalid patch.start ${patch.start}`);
+      }
+    }
+    if (patch.end !== undefined) {
+      if (
+        Number.isFinite(patch.end) &&
+        patch.end > next.start &&
+        (limits?.durationSeconds === undefined || patch.end <= limits.durationSeconds)
+      ) {
+        next.end = patch.end;
+        changed = true;
+      } else {
+        issues.push(`ignored invalid patch.end ${patch.end}`);
+      }
+    }
+    if (patch.social !== undefined) {
+      const social = ClipSocialSchema.safeParse(patch.social);
+      if (social.success) {
+        next.social = social.data;
+        changed = true;
+      } else {
+        issues.push('ignored invalid patch.social');
+      }
+    }
+    const applied = verdict.verdict === 'pass' ? true : changed;
+    next.revisions = [
+      ...(candidate.revisions ?? []),
+      { round, verdict: verdict.verdict, issues, applied },
+    ];
+    kept.push(next);
+  }
+  return kept;
+}
+
+// ---------------------------------------------------------------------------
+// Context budget guards (long sources)
+//
+// A multi-hour source produces hundreds of candidate windows and thousands of
+// transcript words. The MODEL must never receive all of it: its context would
+// reject the request. Three hard guards keep every agent payload bounded:
+//   - the critic sees only the TOP-`REVIEW_CANDIDATE_LIMIT` candidates by
+//     score, in compact form, under a fixed character budget;
+//   - each analysis shard's transcript slice is window-scoped AND char-capped;
+//   - everything else the pipeline moves around stays local/offline.
+// ---------------------------------------------------------------------------
+
+/** Candidates the critic ever sees (best-first by score). */
+export const REVIEW_CANDIDATE_LIMIT = 24;
+/** Hard character budget of the critic state (contract line included). */
+export const REVIEW_STATE_CHAR_BUDGET = 12_000;
+/** Per-shard transcript slice sent to vision is capped at this many chars. */
+export const ANALYZE_TRANSCRIPT_SLICE_CHARS = 1_200;
+
+/** Compact candidate form the critic receives (never the full ClipRange). */
+export interface CriticCandidateSummary {
+  id: string;
+  start: number;
+  end: number;
+  score: number;
+  layout: 'single' | 'duo';
+  faceCount: number;
+  title: string;
+  description?: string;
+}
+
+/**
+ * The best `limit` candidates in compact form, sorted by score descending
+ * (ties: earlier start first). Deterministic; inputs never mutated.
+ */
+export function compactCandidatesForReview(
+  candidates: readonly ClipRange[],
+  limit = REVIEW_CANDIDATE_LIMIT,
+): CriticCandidateSummary[] {
+  return [...candidates]
+    .sort((a, b) => b.score - a.score || a.start - b.start || a.id.localeCompare(b.id))
+    .slice(0, Math.max(0, limit))
+    .map((range) => ({
+      id: range.id,
+      start: range.start,
+      end: range.end,
+      score: range.score,
+      layout: range.layout,
+      faceCount: range.faces.length,
+      title: range.social.title.slice(0, 120),
+      description: range.social.description.slice(0, 160),
+    }));
+}
+
+/**
+ * Build the critic state within `REVIEW_STATE_CHAR_BUDGET`: best candidates
+ * first in compact form; when over budget the descriptions go first, then the
+ * list shrinks from the worst end. `reviewedIds` reports exactly what the
+ * model will see (the rest of the candidates simply keeps its score).
+ */
+export function buildCriticState(input: {
+  objective: string;
+  sourceDurationSeconds?: number;
+  candidates: readonly ClipRange[];
+  limit?: number;
+}): { state: string; reviewedIds: string[] } {
+  const head = REVIEW_RESPONSE_CONTRACT;
+  const budget = REVIEW_STATE_CHAR_BUDGET - head.length - 1;
+  const envelope = {
+    objective: input.objective.slice(0, 300),
+    sourceDurationSeconds: input.sourceDurationSeconds ?? null,
+  };
+  let list: CriticCandidateSummary[] = compactCandidatesForReview(
+    input.candidates,
+    input.limit ?? REVIEW_CANDIDATE_LIMIT,
+  );
+  let payload = JSON.stringify({ ...envelope, candidates: list });
+  if (payload.length > budget) {
+    list = list.map((summary) => {
+      const { description: _dropped, ...lean } = summary;
+      return { ...lean, title: lean.title.slice(0, 60) };
+    });
+    payload = JSON.stringify({ ...envelope, candidates: list });
+    while (payload.length > budget && list.length > 1) {
+      list = list.slice(0, list.length - 1);
+      payload = JSON.stringify({ ...envelope, candidates: list });
+    }
+  }
+  return { state: `${head}\n${payload}`, reviewedIds: list.map((summary) => summary.id) };
+}
+
+/**
+ * Cap a transcript slice at `maxChars`, cutting on a word boundary and marking
+ * the truncation — the slice sent to the model is never the full transcript.
+ */
+export function truncateTranscriptSlice(
+  text: string,
+  maxChars = ANALYZE_TRANSCRIPT_SLICE_CHARS,
+): string {
+  if (text.length <= maxChars) return text;
+  const head = text.slice(0, maxChars);
+  const cut = head.lastIndexOf(' ');
+  return `${(cut > maxChars / 2 ? head.slice(0, cut) : head).trimEnd()} …`;
+}
+
+/**
+ * Greedy pick of the best `limit` NON-OVERLAPPING spans (input order = best
+ * first): dense sources hatch dozens of near-identical windows around the
+ * same hook, and analysing those would burn the shard budget on ONE moment.
+ * Spans at least `minGapSeconds` apart pass together; when strict
+ * non-overlap yields fewer than `limit` items the remaining slots are
+ * backfilled from the skipped ones in order.
+ */
+export function selectDistinctSpans<T>(
+  items: readonly T[],
+  spanOf: (item: T) => { start: number; end: number },
+  limit: number,
+  options?: { minGapSeconds?: number },
+): T[] {
+  const minGap = options?.minGapSeconds ?? 5;
+  const picked: Array<{ start: number; end: number }> = [];
+  const chosen: T[] = [];
+  const skipped: T[] = [];
+  for (const item of items) {
+    if (chosen.length >= limit) break;
+    const span = spanOf(item);
+    const clash = picked.some(
+      (other) => span.start < other.end + minGap && other.start < span.end + minGap,
+    );
+    if (clash) {
+      skipped.push(item);
+      continue;
+    }
+    picked.push(span);
+    chosen.push(item);
+  }
+  for (const item of skipped) {
+    if (chosen.length >= limit) break;
+    chosen.push(item);
+  }
+  return chosen;
 }

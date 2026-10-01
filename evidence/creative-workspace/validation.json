@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 1,
+  "goal": "G-001",
+  "visual": {
+    "status": "PASS",
+    "reviewer": "zai/glm-5.3-flash:high",
+    "desktopViewport": [1440, 1000],
+    "mobileViewport": [390, 844],
+    "noPageOverflow": true,
+    "fourRealPngPreviewsDecoded": true,
+    "filters": ["client:bfc (3, includes preset ownership)", "project:clientless (2)", "asset:bfc-cover (2)", "kind:video (2)", "kind:svg-empty (0)"],
+    "feedStoryButtonsVerified": true,
+    "revisionDiffVerified": true,
+    "video": {"played": true, "nativeControls": true, "duration": 15.741, "width": 1080, "height": 1920},
+    "download": {"name": "feed.png", "bytes": 640331, "sha256": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f", "savedFileMatchesSealedEndpoint": true},
+    "screenshots": [
+      {"path": "evidence/creative-workspace/screenshots/desktop-final.png", "sha256": "5855df55a8437d9b6489b4f86a97b718a99f74e3d372b7388ac642dfb47cae17", "width": 1425, "height": 2263},
+      {"path": "evidence/creative-workspace/screenshots/desktop-video-diff.png", "sha256": "abefb06d3d44eae8255ca08a947fd5fcb3cf6311f5a51c5443dd572a1bc8a933", "width": 1425, "height": 2707},
+      {"path": "evidence/creative-workspace/screenshots/mobile-final.png", "sha256": "63efa8c86537eef3504bd065ec73302a1185434cace83b8348d654d23d1bfd23", "width": 390, "height": 4634}
+    ]
+  },
+  "coordinator": {
+    "command": "bun run studio:verify && bun run studio:verify:r2 && bun run build",
+    "exitCode": 0,
+    "originalFilesChecked": 55,
+    "allOriginalSha256Unchanged": true,
+    "privateRetryBucket": "video-maker-archive-prd",
+    "mediaIncidentEvidence": ["validation-media-incident.json", "live-inventory-media-incident.json"],
+    "configurationWarning": "Existing R2_BUNDLES_BUCKET_NAME resolves media; private verifier pins archive at runtime. For CLI sync explicitly set R2_BUNDLES_BUCKET_NAME=video-maker-archive-prd; no .env/credentials were edited."
+  },
+  "offline": {
+    "ranAt": "2026-10-01T04:29:34.561Z",
+    "exitCode": 0,
+    "command": "bun run studio:verify",
+    "fixtureBytes": 9745720,
+    "suites": {
+      "required": 17,
+      "filesRan": 17,
+      "totalTests": 269,
+      "passed": 269,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "adoption": {
+      "projectIds": {
+        "shared": "shared-showcase",
+        "solo": "solo-workshop"
+      },
+      "revisions": [
+        {
+          "projectId": "shared-showcase",
+          "assetId": "bfc-cover",
+          "revisionId": "d004",
+          "rootHash": "b5b087ff87cf11918ab12e499317ccb28eb5f7c1107eb421795e5011dcfac1e2",
+          "files": 6
+        },
+        {
+          "projectId": "shared-showcase",
+          "assetId": "bfc-cover",
+          "revisionId": "d005",
+          "rootHash": "45a26c30ae1e93bf273ec6745da6078e399975d0234c0715b15397265711f8fd",
+          "files": 6
+        },
+        {
+          "projectId": "solo-workshop",
+          "assetId": "hello-video",
+          "revisionId": "d006",
+          "rootHash": "3ae539abad24665c6e37e96389ba32b700b78cddfcf049faab75c332dc13db9e",
+          "files": 12
+        },
+        {
+          "projectId": "solo-workshop",
+          "assetId": "hello-video",
+          "revisionId": "d007",
+          "rootHash": "984e152ec7a699a44b64438ecbf6d16b2220c9b2b529febb0490b5618bf9f681",
+          "files": 12
+        }
+      ],
+      "restoreChecks": [
+        {
+          "revisionId": "d004",
+          "filesOk": true,
+          "files": 6
+        },
+        {
+          "revisionId": "d006",
+          "filesOk": true,
+          "files": 12
+        }
+      ],
+      "cliExitCodes": [
+        {
+          "args": "project list --workspace /tmp/cw-verify-1XW07B/workspace --json",
+          "exitCode": 0
+        },
+        {
+          "args": "asset inspect bfc-cover --project shared-showcase --workspace /tmp/cw-verify-1XW07B/workspace --json",
+          "exitCode": 0
+        },
+        {
+          "args": "asset history hello-video --project solo-workshop --workspace /tmp/cw-verify-1XW07B/workspace --json",
+          "exitCode": 0
+        },
+        {
+          "args": "preset list --workspace /tmp/cw-verify-1XW07B/workspace --json",
+          "exitCode": 0
+        }
+      ]
+    },
+    "dashboardSmoke": {
+      "healthOk": true,
+      "catalogOk": true,
+      "assetApiOk": true,
+      "imageServedSha": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+      "imageShaMatches": true,
+      "videoContentType": "video/mp4",
+      "videoServed": true,
+      "cspPresent": true,
+      "port": 42977,
+      "stopped": true,
+      "url": "http://127.0.0.1:42977 (efímero, detenido)"
+    },
+    "failures": [],
+    "notes": []
+  },
+  "live": {
+    "ranAt": "2026-10-01T04:29:40.533Z",
+    "exitCode": 0,
+    "status": "completed-private",
+    "command": "bun run studio:verify:r2",
+    "authorization": {
+      "note": "nota del operador 2026-10-01T03:53:33.958Z",
+      "bucket": "video-maker-archive-prd",
+      "additionalPutCapBytes": 10485760
+    },
+    "runtimePin": "createPrivateStudioR2Storage({ ...env, bundlesBucket: video-maker-archive-prd }) — credenciales env-first, nombre de bucket fijado",
+    "sessionPath": "evidence/creative-workspace/live-session.json",
+    "putLedgerPath": "evidence/creative-workspace/live-put-ledger.json",
+    "putLedger": {
+      "reservedBytes": 8288,
+      "attemptedPutBytes": 96,
+      "consumedBefore": 7281485,
+      "consumedAfter": 7281581,
+      "capBytes": 10485760
+    },
+    "mediaIncidentRef": "evidence/creative-workspace/validation-media-incident.json (evidencia REAL del bucket media preservada)",
+    "gate": "G-cw-live-r2 + nota explícita del operador 2026-10-01T03:53Z",
+    "bucket": "video-maker-archive-prd",
+    "projectIds": [
+      "cw-live-1001-447742",
+      "cw-live-1001-447742-solo"
+    ],
+    "receipts": [
+      {
+        "revisionId": "d004",
+        "status": "confirmed",
+        "rootHash": "ebaa6594412eb3bfff9b6362a81da3016f02c31343265f46ea8d74de5297903b",
+        "manifestKey": "studio/v1/projects/cw-live-1001-447742/assets/bfc-cover/revisions/d004/manifest.json"
+      },
+      {
+        "revisionId": "d005",
+        "status": "confirmed",
+        "rootHash": "112fc2ee05f117449ba69677eebf0e48be254ccbcd0b10cc05248fdc9db05f6e",
+        "manifestKey": "studio/v1/projects/cw-live-1001-447742/assets/bfc-cover/revisions/d005/manifest.json"
+      },
+      {
+        "revisionId": "d006",
+        "status": "confirmed",
+        "rootHash": "0580212e3202ab731b428e26cbad3a2e2eff0f927c5b4f0eb46669f9cdc31d51",
+        "manifestKey": "studio/v1/projects/cw-live-1001-447742-solo/assets/hello-video/revisions/d006/manifest.json"
+      },
+      {
+        "revisionId": "d007",
+        "status": "confirmed",
+        "rootHash": "98413aa8d983aa142f87c7e973d5dfcdfc14bbe0dea34c9fa375168b450a368b",
+        "manifestKey": "studio/v1/projects/cw-live-1001-447742-solo/assets/hello-video/revisions/d007/manifest.json"
+      }
+    ],
+    "deepVerify": {
+      "shared": 2,
+      "solo": 2,
+      "failures": []
+    },
+    "conditionalPutProof": {
+      "key": "studio/v1/projects/cw-live-1001-447742/probe/ifnone-match-32b.bin",
+      "probeBytes": 32,
+      "sameBytesIdempotent": true,
+      "differentBytesRejected": true,
+      "objectUnchanged": true
+    },
+    "recoveredRevisions": [
+      {
+        "projectId": "cw-live-1001-447742",
+        "assetId": "bfc-cover",
+        "revisionId": "d004",
+        "rootHash": "ebaa6594412eb3bfff9b6362a81da3016f02c31343265f46ea8d74de5297903b",
+        "manifestKey": "studio/v1/projects/cw-live-1001-447742/assets/bfc-cover/revisions/d004/manifest.json",
+        "manifestBytesEqual": true,
+        "filesChecked": 6,
+        "filesShaOk": 6
+      },
+      {
+        "projectId": "cw-live-1001-447742",
+        "assetId": "bfc-cover",
+        "revisionId": "d005",
+        "rootHash": "112fc2ee05f117449ba69677eebf0e48be254ccbcd0b10cc05248fdc9db05f6e",
+        "manifestKey": "studio/v1/projects/cw-live-1001-447742/assets/bfc-cover/revisions/d005/manifest.json",
+        "manifestBytesEqual": true,
+        "filesChecked": 6,
+        "filesShaOk": 6
+      },
+      {
+        "projectId": "cw-live-1001-447742-solo",
+        "assetId": "hello-video",
+        "revisionId": "d006",
+        "rootHash": "0580212e3202ab731b428e26cbad3a2e2eff0f927c5b4f0eb46669f9cdc31d51",
+        "manifestKey": "studio/v1/projects/cw-live-1001-447742-solo/assets/hello-video/revisions/d006/manifest.json",
+        "manifestBytesEqual": true,
+        "filesChecked": 12,
+        "filesShaOk": 12
+      },
+      {
+        "projectId": "cw-live-1001-447742-solo",
+        "assetId": "hello-video",
+        "revisionId": "d007",
+        "rootHash": "98413aa8d983aa142f87c7e973d5dfcdfc14bbe0dea34c9fa375168b450a368b",
+        "manifestKey": "studio/v1/projects/cw-live-1001-447742-solo/assets/hello-video/revisions/d007/manifest.json",
+        "manifestBytesEqual": true,
+        "filesChecked": 12,
+        "filesShaOk": 12
+      }
+    ],
+    "activeShaProofs": {
+      "coverFeed": "b8b78e43b6df18b0f0c587b7b5975c5321b6597b09e56906cdf10e1d3baf1fb6",
+      "videoMp4": "3efc7565dd09d3f1bc82c8f1baef34b3426c9c61cc64ef72493e5e0c3ed3ce39",
+      "remotionLock": "94ac08a91c2dc6aec7d8ff9a401a09b20c230227f49f6735c77ac51b200cfc56"
+    },
+    "catalogRebuild": {
+      "shared": 2,
+      "solo": 2
+    },
+    "metrics": {
+      "head": 142,
+      "get": 92,
+      "list": 8,
+      "put": 3,
+      "putPayloadBytes": 96,
+      "durationMs": 79063,
+      "maxAttempts": 1,
+      "namespaceBytes": 9766831,
+      "objectCount": 31
+    },
+    "inventoryPath": "evidence/creative-workspace/live-inventory.json",
+    "inventoryComparison": {
+      "priorInventory": true,
+      "priorBucketDiffers": false,
+      "priorKeys": 31,
+      "priorRevisions": 4,
+      "newKeysThisRun": 0,
+      "newKeys": [],
+      "dedupVerified": true
+    },
+    "failures": []
+  }
+}

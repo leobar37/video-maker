@@ -4,7 +4,7 @@
  * scaffold, and paid runs refusing without the explicit spend cap.
  */
 import { describe, expect, test } from 'bun:test';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -208,5 +208,46 @@ describe('other verbs plan offline', () => {
     const steps = await still.plan(makeTestContext({ project: dir }, { mode: 'plan' }));
     expect(steps.filter((step) => step.writes?.startsWith('qa/stills/'))).toHaveLength(2);
     expect(steps.some((step) => step.action.includes('filmTimingPlan'))).toBe(true);
+  });
+});
+
+describe('publish social-post.json fallback', () => {
+  test('run() lee account/text/media del proyecto cuando faltan flags', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-publish-'));
+    await makeTestProject(dir);
+    await writeFile(
+      join(dir, 'social-post.json'),
+      JSON.stringify({
+        account: 'instagram:@bfc',
+        text: 'hola bfc',
+        media: ['https://cdn.example/cover.png'],
+        tags: ['gym'],
+        idempotencyKey: 'publish:test:bfc-01',
+      }),
+    );
+    const publish = specByVerb(buildMediaSpecs(makeTestDeps()), 'publish');
+    const result = await publish.run(
+      makeTestContext({ project: dir, 'spend-cap': 2 }, { mode: 'run' }),
+    );
+    expect(result.exitCode).toBe(0);
+    const journal = JSON.parse(
+      await readFile(join(dir, 'qa', 'publication', 'publish-test-bfc-01', 'journal.json'), 'utf8'),
+    ) as { post: { account: string; text: string; media: string[] } };
+    expect(journal.post.account).toBe('instagram:@bfc');
+    expect(journal.post.text).toBe('hola bfc');
+    expect(journal.post.media).toEqual(['https://cdn.example/cover.png']);
+  });
+
+  test('run() exige flags o archivo válido', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-publish-'));
+    await makeTestProject(dir);
+    const publish = specByVerb(buildMediaSpecs(makeTestDeps()), 'publish');
+    await expect(
+      publish.run(makeTestContext({ project: dir, 'spend-cap': 2 }, { mode: 'run' })),
+    ).rejects.toThrow(/--account and --text/);
+    await writeFile(join(dir, 'social-post.json'), '{no-json');
+    await expect(
+      publish.run(makeTestContext({ project: dir, 'spend-cap': 2 }, { mode: 'run' })),
+    ).rejects.toThrow(/social-post.json inválido/);
   });
 });
