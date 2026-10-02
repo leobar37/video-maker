@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "id": "leobar",
+  "version": 1,
+  "name": "Leobar · edición práctica con IA",
+  "identity": {
+    "palette": ["#081118", "#163A43", "#6AE6DF", "#FFFFFF"],
+    "fonts": ["Arial", "Helvetica", "sans-serif"],
+    "tone": "Español, primera persona, práctico, curioso y honesto; sin promesas absolutas ni hype.",
+    "rules": [
+      "La voz y el argumento mandan: conservar frases completas antes que forzar duración.",
+      "Títulos breves y motion ligado a lo que se dice; no interrumpir voz con tarjetas de transición.",
+      "Subtítulos WordSubtitles configurables, sobre el pecho en cámara y sin tapar la cara ni pegarlos al borde.",
+      "Distinguir pantalla ilustrativa de captura sincronizada; no presentar un proceso como prueba de éxito.",
+      "Publicar solo en las cuentas verificadas del perfil leobar y con aprobación específica del render y texto actuales."
+    ]
+  },
+  "editing": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "captions": {
+      "component": "WordSubtitles",
+      "cameraYPercent": 67,
+      "screenYPercent": 60,
+      "maxWords": 4,
+      "maxChars": 28,
+      "fontSize": 58,
+      "accentColor": "#6AE6DF",
+      "textColor": "#FFFFFF"
+    },
+    "audio": {
+      "source": "original",
+      "tracks": 1,
+      "ttsByDefault": false,
+      "musicByDefault": false,
+      "targetLufs": -16,
+      "maxTruePeakDbtp": -1.5,
+      "normalizationTargetTruePeakDbtp": -2
+    },
+    "cuts": {
+      "requireAcousticEvidence": true,
+      "neverCutFromAsrAlone": true,
+      "preserveEffectPoses": true,
+      "preserveCompletePhrases": true
+    },
+    "render": {
+      "strategy": "ffmpeg-continuous-body-remotion-overlays",
+      "videoCodec": "h264",
+      "pixelFormat": "yuv420p",
+      "audioCodec": "aac",
+      "sampleRate": 48000,
+      "audioBitrate": "192k"
+    }
+  },
+  "publishing": {
+    "provider": "zernio",
+    "profile": { "name": "leobar", "id": "6ab44f589c4fc6a894efdfff" },
+    "targets": [
+      {
+        "platform": "tiktok",
+        "accountId": "6ab44f6c8d284ffb2137f74c",
+        "username": "theleonbar37",
+        "constraints": { "maxDurationSeconds": 600, "maxTextCharacters": 2200 },
+        "options": { "privacyLevel": "PUBLIC_TO_EVERYONE", "allowComment": true, "allowDuet": false, "allowStitch": false }
+      },
+      {
+        "platform": "youtube",
+        "accountId": "6ab44f978d284ffb2137f7b9",
+        "username": "leobar3787",
+        "constraints": { "maxDurationSeconds": 180, "maxTextCharacters": 5000, "maxTitleCharacters": 100 },
+        "options": { "visibility": "public", "madeForKids": false, "categoryId": "28" }
+      },
+      {
+        "platform": "linkedin",
+        "accountId": "6ab451908d284ffb2138018b",
+        "username": "Elmer León Barboza",
+        "constraints": { "maxDurationSeconds": 900, "maxTextCharacters": 3000 }
+      },
+      {
+        "platform": "twitter",
+        "accountId": "6ab53a988d284ffb213cbab2",
+        "username": "elmer_joselito",
+        "constraints": { "maxDurationSeconds": 140, "maxTextCharacters": 280 }
+      }
+    ],
+    "maxHashtags": 5,
+    "discloseSyntheticMediaWhenPresent": true
+  },
+  "safety": {
+    "publishRequiresExplicitApproval": true,
+    "paidGenerationRequiresNewBudgetApproval": true,
+    "neverRetryUncertainPublication": true,
+    "uploadOnlyFinalAndCover": true,
+    "preserveOriginals": true
+  }
+}

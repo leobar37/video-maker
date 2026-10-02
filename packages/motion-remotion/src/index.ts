@@ -25,6 +25,8 @@ export * from './subtitle-segments';
 export * from './subtitle-words';
 export * from './Subtitles';
 export * from './types';
+export * from './word-captions';
+export * from './WordSubtitles';
 
 // Type-only surface of the render pipeline (functions live on the subpath).
 export type {

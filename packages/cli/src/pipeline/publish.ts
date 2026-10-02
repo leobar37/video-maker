@@ -38,13 +38,7 @@ export interface PublishJournal {
   schemaVersion: 1;
   id: string;
   idempotencyKey: string;
-  post: {
-    account: string;
-    text: string;
-    media: string[];
-    scheduledFor?: string;
-    tags?: string[];
-  };
+  post: Omit<SocialPost, 'idempotencyKey'>;
   createdAt: string;
   updatedAt: string;
   /** One entry per attempt; the last one is the current outcome. */
@@ -63,6 +57,11 @@ export interface PublishOptions {
   /** ISO timestamp: schedule instead of publishing now. */
   scheduledFor?: string;
   tags?: string[];
+  profileId?: SocialPost['profileId'];
+  title?: SocialPost['title'];
+  coverUrl?: SocialPost['coverUrl'];
+  tiktokSettings?: SocialPost['tiktokSettings'];
+  youtube?: SocialPost['youtube'];
   /** Stable key: one live post per intended publication. */
   idempotencyKey: string;
   /** Explicit spend cap (the paid-run gate). */
@@ -135,6 +134,11 @@ export async function runPublish(options: PublishOptions): Promise<PublishRunRes
     media: options.media,
     ...(options.scheduledFor !== undefined ? { scheduledFor: options.scheduledFor } : {}),
     ...(options.tags !== undefined ? { tags: options.tags } : {}),
+    ...(options.profileId !== undefined ? { profileId: options.profileId } : {}),
+    ...(options.title !== undefined ? { title: options.title } : {}),
+    ...(options.coverUrl !== undefined ? { coverUrl: options.coverUrl } : {}),
+    ...(options.tiktokSettings !== undefined ? { tiktokSettings: options.tiktokSettings } : {}),
+    ...(options.youtube !== undefined ? { youtube: options.youtube } : {}),
   };
 
   const previous = await readJournal(journalAbsolute);
@@ -201,7 +205,7 @@ export async function runPublish(options: PublishOptions): Promise<PublishRunRes
     attempt: Omit<PublishAttemptRecord, 'at'>,
   ): Promise<PublishRunResult> => {
     const record: PublishAttemptRecord = { at: nowIso(), ...attempt };
-    if (outcome === 'published' || outcome === 'accepted') {
+    if (outcome === 'published' || (outcome === 'accepted' && !options.profileId)) {
       if (!stages.includes('submitted')) stages.push('submitted');
       if (!stages.includes(PUBLICATION_FINAL_STAGE)) stages.push(PUBLICATION_FINAL_STAGE);
     } else if (attempt.action !== 'replay') {
@@ -217,6 +221,11 @@ export async function runPublish(options: PublishOptions): Promise<PublishRunRes
         media: post.media,
         ...(post.scheduledFor !== undefined ? { scheduledFor: post.scheduledFor } : {}),
         ...(post.tags !== undefined ? { tags: post.tags } : {}),
+        ...(post.profileId !== undefined ? { profileId: post.profileId } : {}),
+        ...(post.title !== undefined ? { title: post.title } : {}),
+        ...(post.coverUrl !== undefined ? { coverUrl: post.coverUrl } : {}),
+        ...(post.tiktokSettings !== undefined ? { tiktokSettings: post.tiktokSettings } : {}),
+        ...(post.youtube !== undefined ? { youtube: post.youtube } : {}),
       },
       createdAt,
       updatedAt: nowIso(),

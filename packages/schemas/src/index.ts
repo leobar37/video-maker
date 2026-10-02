@@ -10,6 +10,13 @@ export * from './narration';
 export * from './catalog';
 export * from './clip';
 export * from './studio';
+export {
+  CreatorPlatformSchema, CreatorPresetSchema, CreatorDraftSchema, CreatorProjectSchema,
+  CreatorQaSchema, CreatorProbeSchema, CreatorTikTokInfoSchema, CreatorTikTokEnvelopeSchema,
+  CreatorIntentSchema, CreatorTargetResultSchema, CreatorRemotePostSchema, CreatorLookupSchema,
+  type CreatorPreset, type CreatorDraft, type CreatorProject, type CreatorMediaQa,
+  type CreatorIntent, type CreatorTargetResult, type CreatorTikTokCapability,
+} from './creator';
 
 /**
  * Current (latest) `schemaVersion` per contract. Older versions remain

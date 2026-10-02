@@ -155,6 +155,22 @@ export const leoTokens: BrandTokens = {
   tagline: 'IA explicada en práctica.',
 };
 
+/** Leobar — original-voice camera/screen videos; distinct from conceptual `leo`. */
+export const leobarTokens: BrandTokens = {
+  whenToUse: 'Videos de leobar frente a cámara, demos de pantalla y edición práctica con IA.',
+  brandName: 'leobar',
+  canvas: { from: '#081118', to: '#081118', angle: 0 },
+  ink: '#FFFFFF',
+  accent: '#6AE6DF',
+  glow: 'rgba(106,230,223,0.1)',
+  brandGradient: { from: '#081118', to: '#163A43' },
+  mode: 'dark',
+  fontDisplay: 'Arial, Helvetica, sans-serif',
+  fontBody: 'Arial, Helvetica, sans-serif',
+  tagline: 'Probando, construyendo y mostrando el proceso.',
+  publicationProfile: 'leobar',
+};
+
 const GENERIC_ELENA_ACCENT = '#15803D';
 
 /**
@@ -257,6 +273,7 @@ export const brandPresets = {
   elena: elenaTokens,
   gymspace: gymspaceTokens,
   leo: leoTokens,
+  leobar: leobarTokens,
   // Línea base educativa; los canales la heredan.
   'generic-elena': genericElenaTokens,
   'cuentas-claras': cuentasClarasTokens,

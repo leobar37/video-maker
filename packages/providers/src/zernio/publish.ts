@@ -89,8 +89,19 @@ export function buildPostBody(
 ): Record<string, unknown> {
   return {
     content: post.text,
-    mediaItems: post.media.map((url) => ({ url })),
-    platforms: [{ platform: target.platform, accountId: target.accountId }],
+    mediaItems: post.media.map((url) => ({
+      url,
+      ...(post.coverUrl ? { type: 'video', thumbnail: post.coverUrl } : {}),
+    })),
+    platforms: [{
+      platform: target.platform,
+      accountId: target.accountId,
+      ...(target.platform === 'youtube' && post.youtube
+        ? { platformSpecificData: post.youtube } : {}),
+    }],
+    ...(post.title !== undefined ? { title: post.title } : {}),
+    ...(post.tags !== undefined ? { tags: post.tags } : {}),
+    ...(post.tiktokSettings !== undefined ? { tiktokSettings: post.tiktokSettings } : {}),
     ...(opts.scheduled
       ? { scheduledFor: post.scheduledFor, timezone: opts.timezone }
       : { publishNow: true }),
@@ -203,7 +214,12 @@ export class ZernioPublisher implements Publisher {
 
     // Account resolution happens before the wire attempt: a bad selector must
     // never reach the remote.
-    const accounts = await this.#accounts.merged(ctx);
+    const accounts = await this.#accounts.merged(ctx, post.profileId);
+    if (post.profileId && !accounts.some((account) =>
+      account.id === post.account && account.canPost === true &&
+      (account.status === 'healthy' || account.status === 'active' || account.status === 'ok'))) {
+      throw new PostValidationError(['explicit profile account is missing or unhealthy']);
+    }
     const target = resolveAccountRef(accounts, post.account);
     const body = buildPostBody(post, target, {
       scheduled: mode.scheduled,
@@ -257,7 +273,10 @@ export class ZernioPublisher implements Publisher {
         schemaVersion: 1,
         idempotencyKey,
         attempt,
-        outcome: 'published',
+        outcome: !post.profileId ? 'published'
+          : created.platforms.some((platform) => platform.platform === target.platform && platform.status === 'failed') ? 'failed'
+          : created.platforms.some((platform) => platform.platform === target.platform && platform.status === 'published') ? 'published'
+          : 'accepted',
         at: at(),
         remoteId: created.id,
         url: postUrlOf(created),
@@ -287,9 +306,11 @@ export class ZernioPublisher implements Publisher {
       schemaVersion: 1,
       idempotencyKey,
       attempt,
-      outcome: 'failed',
+      outcome: post.profileId && response.status >= 500 ? 'uncertain' : 'failed',
       at: at(),
-      detail: `POST /posts → HTTP ${response.status}: definite rejection, nothing went out`,
+      detail: post.profileId && response.status >= 500
+        ? `POST /posts → HTTP ${response.status}: server outcome uncertain; do not resubmit`
+        : `POST /posts → HTTP ${response.status}: definite rejection, nothing went out`,
     };
     await this.#journal.append(entry);
     return outcomeOf(entry);

@@ -134,6 +134,17 @@ export interface PublishOutcome {
   detail?: string;
 }
 
+export interface TikTokSettings {
+  privacy_level: 'PUBLIC_TO_EVERYONE' | 'MUTUAL_FOLLOW_FRIENDS' | 'SELF_ONLY';
+  allow_comment: boolean;
+  allow_duet: boolean;
+  allow_stitch: boolean;
+  content_preview_confirmed: boolean;
+  express_consent_given: boolean;
+  video_made_with_ai?: boolean;
+  video_cover_image_url?: string;
+}
+
 export interface SocialPost {
   idempotencyKey: string;
   account: string;
@@ -142,6 +153,18 @@ export interface SocialPost {
   media: string[];
   scheduledFor?: string;
   tags?: string[];
+  /** Explicit profile scope; omitted by legacy callers. */
+  profileId?: string;
+  title?: string;
+  coverUrl?: string;
+  tiktokSettings?: TikTokSettings;
+  youtube?: {
+    title: string;
+    visibility: 'public' | 'private' | 'unlisted';
+    madeForKids: boolean;
+    containsSyntheticMedia?: boolean;
+    categoryId?: string;
+  };
 }
 
 export interface PublisherAccount {

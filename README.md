@@ -23,6 +23,28 @@ bun run build
 bun run credentials:probe   # imprime solo nombres y longitudes, nunca valores
 ```
 
+## Workflow compartido por clientes y redes
+
+Guía común: [edición → QA → aprobación → publicación](docs/creator-workflow.md).
+`creator-*` consume un preset explícito de cliente y reglas por destino; no depende
+de leobar, de una red ni de una cantidad fija de cuentas. Cada proyecto empieza
+sin aprobaciones ni publicaciones heredadas.
+
+- [Preset leobar](presets/leobar.json) y [su configuración](docs/leobar-workflow.md).
+- [Plantilla de otro cliente](presets/example-client.json), sin cuentas reales.
+
+```bash
+bun run vm creator-init --preset presets/leobar.json --project projects/mi-video --id mi-video --title 'Mi video' --dry-run
+bun run vm creator-init --preset presets/leobar.json --project projects/mi-video --id mi-video --title 'Mi video'
+# Después de editar/renderizar y completar publication/draft.json:
+bun run vm creator-qa --project projects/mi-video
+bun run vm creator-publish --project projects/mi-video --spend-cap 0 --dry-run
+```
+
+Publicar requiere revisión y aprobación del render/copy exactos más `--confirm`;
+consulta los pasos y efectos en la guía. No es un editor automático ni habilita
+generaciones de pago.
+
 ## Credenciales
 
 Estrategia env-first con fallback a Doppler `elena-tech` / config `prd`:

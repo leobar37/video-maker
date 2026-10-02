@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "id": "example-client",
+  "version": 1,
+  "name": "Cliente de ejemplo · configurar antes de publicar",
+  "identity": {
+    "palette": ["#F5F5F5", "#E5E7EB", "#2563EB", "#111827"],
+    "fonts": ["Arial", "Helvetica", "sans-serif"],
+    "tone": "Español claro, informativo y fiel a la identidad del cliente.",
+    "rules": [
+      "Esta plantilla no contiene cuentas reales ni autoriza publicaciones.",
+      "Sustituir perfil y todas las cuentas por las del cliente, verificadas en el proveedor.",
+      "Aprobar por proyecto el render y el texto exactos."
+    ]
+  },
+  "editing": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "captions": {
+      "component": "WordSubtitles",
+      "cameraYPercent": 72,
+      "screenYPercent": 72,
+      "maxWords": 6,
+      "maxChars": 40,
+      "fontSize": 44,
+      "accentColor": "#2563EB",
+      "textColor": "#111827"
+    },
+    "audio": {
+      "source": "original",
+      "tracks": 1,
+      "ttsByDefault": false,
+      "musicByDefault": false,
+      "targetLufs": -16,
+      "maxTruePeakDbtp": -1.5,
+      "normalizationTargetTruePeakDbtp": -2
+    },
+    "cuts": {
+      "requireAcousticEvidence": true,
+      "neverCutFromAsrAlone": true,
+      "preserveEffectPoses": true,
+      "preserveCompletePhrases": true
+    },
+    "render": {
+      "strategy": "ffmpeg-continuous-body-remotion-overlays",
+      "videoCodec": "h264",
+      "pixelFormat": "yuv420p",
+      "audioCodec": "aac",
+      "sampleRate": 48000,
+      "audioBitrate": "192k"
+    }
+  },
+  "publishing": {
+    "provider": "zernio",
+    "profile": { "name": "example-client-not-configured", "id": "000000000000000000000000" },
+    "targets": [
+      {
+        "platform": "facebook",
+        "accountId": "000000000000000000000001",
+        "username": "example-account-not-configured",
+        "constraints": { "maxDurationSeconds": 900, "maxTextCharacters": 1000 }
+      }
+    ],
+    "maxHashtags": 3,
+    "discloseSyntheticMediaWhenPresent": true
+  },
+  "safety": {
+    "publishRequiresExplicitApproval": true,
+    "paidGenerationRequiresNewBudgetApproval": true,
+    "neverRetryUncertainPublication": true,
+    "uploadOnlyFinalAndCover": true,
+    "preserveOriginals": true
+  }
+}
