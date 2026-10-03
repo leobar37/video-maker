@@ -1,0 +1,107 @@
+{
+  "operations": [
+    {
+      "op": "initiative.create",
+      "input": {
+        "name": "customer-assets-portal",
+        "desc": "Plan .plans/customer-assets-portal; portal privado y bridge CLI/Studio, sin ejecución autorizada al preparar plan."
+      }
+    },
+    {
+      "op": "gate.create",
+      "input": {
+        "id": "G-cap-implement",
+        "initiative": "customer-assets-portal",
+        "title": "Autorizar implementación acotada",
+        "body": "Autoriza edits de las seis fases y tests puros, NO schemas aplicados/DB/live/infra/Doppler/emails/deploy. Requiere revisión de goal/contracts y ownership del árbol sucio.",
+        "purpose": "approval"
+      }
+    },
+    {
+      "op": "gate.create",
+      "input": {
+        "id": "G-cap-local",
+        "initiative": "customer-assets-portal",
+        "title": "Autorizar runtime y schemas de tests locales",
+        "body": "Autoriza únicamente Miniflare/Workers D1/R2 emulados temporales, aplicación de schemas/migraciones en DB de fixture desechable y servidores efímeros de prueba con mail fake; ningún DB remoto/Docker/servicio persistente/exposición. Revisar scripts antes de correrlos.",
+        "purpose": "approval"
+      }
+    },
+    {
+      "op": "gate.create",
+      "input": {
+        "id": "G-cap-live",
+        "initiative": "customer-assets-portal",
+        "title": "Autorizar recursos, deploy y piloto Cloudflare",
+        "body": "Solo tras P-005 accepted y revisión de apps/customer-assets/ops: operador asigna cuenta/zona/Worker/D1 privado/R2 privado nuevo aislado, migraciones SQL exactas, secrets y sender autorizado, dominio customers-assets.theelena.me y límites requests/bytes/email/coste. Autoriza únicamente estas mutaciones y smoke sintético <=20MiB y <=2 emails salvo límite humano diferente; sin IA/publicación/deletes/otros buckets.",
+        "purpose": "approval"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CAP-001",
+        "initiative": "customer-assets-portal",
+        "title": "Auth y credenciales demostradas en D1/Workers",
+        "body": "Leer .plans/customer-assets-portal/phases/01-auth-d1-workers-proof.md y ejecutar solo esta unidad, contratos.md y decisions.json normativos. Start/Workers+D1+R2 privado; Studio canónico via CLI local; humano controla visibilidad; no publicación/approvals/IA/GC. Verificar gates; un mutable writer, coordinator dueño integración. No DB/emails/live/deploy fuera de autorizaciones específicas; no findings ajenos.",
+        "acceptance": "Tests Workers/D1 de login, session y API keys y prueba streaming/hash/R2 pasan; typecheck y build exit 0; versiones y configuración de adapter documentadas. Verification: bun --cwd apps/customer-assets run test:worker -- tests/auth-runtime.test.ts tests/upload-runtime.test.ts && bun --cwd apps/customer-assets run typecheck && bun --cwd apps/customer-assets run build; todos exit 0",
+        "blocked_by": "G-cap-implement,G-cap-local"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CAP-002",
+        "initiative": "customer-assets-portal",
+        "title": "Backend privado de clientes, materiales y entregas",
+        "body": "Leer .plans/customer-assets-portal/phases/02-private-client-materials-and-deliveries.md y ejecutar solo esta unidad, contratos.md y decisions.json normativos. Start/Workers+D1+R2 privado; Studio canónico via CLI local; humano controla visibilidad; no publicación/approvals/IA/GC. Verificar gates; un mutable writer, coordinator dueño integración. No DB/emails/live/deploy fuera de autorizaciones específicas; no findings ajenos.",
+        "acceptance": "Endpoints y archivos privados pasan tests de tenant/scope, uploads/idempotencia, entrega interna y posts; typecheck/build exit 0. Verification: bun --cwd apps/customer-assets run test:worker -- tests/access.test.ts tests/uploads.test.ts tests/deliveries.test.ts tests/posts.test.ts && bun --cwd apps/customer-assets run typecheck && bun --cwd apps/customer-assets run build; todos exit 0",
+        "blocked_by": "T-CAP-001"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CAP-003",
+        "initiative": "customer-assets-portal",
+        "title": "CLI conecta materiales y outputs con Studio sin duplicación",
+        "body": "Leer .plans/customer-assets-portal/phases/03-agent-cli-studio-bridge.md y ejecutar solo esta unidad, contratos.md y decisions.json normativos. Start/Workers+D1+R2 privado; Studio canónico via CLI local; humano controla visibilidad; no publicación/approvals/IA/GC. Verificar gates; un mutable writer, coordinator dueño integración. No DB/emails/live/deploy fuera de autorizaciones específicas; no findings ajenos.",
+        "acceptance": "CLI JSON y bridge pasan pruebas de dry-run sin red, importación verificable, entrega exacta/idempotente y compatibilidad; build exit 0. Verification: bun test packages/customer-assets packages/cli/src/specs/portal.test.ts packages/cli/src/portal packages/cli/src/runtime.test.ts packages/cli/src/specs/studio.test.ts && bun run build; todos exit 0",
+        "blocked_by": "T-CAP-002"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CAP-004",
+        "initiative": "customer-assets-portal",
+        "title": "Dashboard admin/cliente y simulación de Instagram",
+        "body": "Leer .plans/customer-assets-portal/phases/04-admin-client-and-instagram-dashboard.md y ejecutar solo esta unidad, contratos.md y decisions.json normativos. Start/Workers+D1+R2 privado; Studio canónico via CLI local; humano controla visibilidad; no publicación/approvals/IA/GC. Verificar gates; un mutable writer, coordinator dueño integración. No DB/emails/live/deploy fuera de autorizaciones específicas; no findings ajenos.",
+        "acceptance": "Tests de UI y browser en desktop/móvil pasan carga, filtros, draft oculto, posts/carrusel y grid persistida; typecheck/build exit 0. Verification: bun --cwd apps/customer-assets run test:ui && bun --cwd apps/customer-assets run test:e2e && bun --cwd apps/customer-assets run typecheck && bun --cwd apps/customer-assets run build; todos exit 0",
+        "blocked_by": "T-CAP-003"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CAP-005",
+        "initiative": "customer-assets-portal",
+        "title": "Flujo completo offline y preparación de operación",
+        "body": "Leer .plans/customer-assets-portal/phases/05-offline-end-to-end-and-operations-readiness.md y ejecutar solo esta unidad, contratos.md y decisions.json normativos. Start/Workers+D1+R2 privado; Studio canónico via CLI local; humano controla visibilidad; no publicación/approvals/IA/GC. Verificar gates; un mutable writer, coordinator dueño integración. No DB/emails/live/deploy fuera de autorizaciones específicas; no findings ajenos.",
+        "acceptance": "Recorrido cliente→CLI→Studio→entrega→grid y negativas de aislamiento pasan offline sin IA/publicación; compatibilidad/build exit 0 y checklist live contiene recursos/rollback. Verification: bun run portal:verify && bun run studio:verify && bun run build && bun --cwd apps/customer-assets run build; todos exit 0",
+        "blocked_by": "T-CAP-004"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-CAP-006",
+        "initiative": "customer-assets-portal",
+        "title": "Piloto HTTPS autorizado en customers-assets.theelena.me",
+        "body": "Leer .plans/customer-assets-portal/phases/06-authorized-cloudflare-domain-pilot.md y ejecutar solo esta unidad, contratos.md y decisions.json normativos. Start/Workers+D1+R2 privado; Studio canónico via CLI local; humano controla visibilidad; no publicación/approvals/IA/GC. Verificar gates; un mutable writer, coordinator dueño integración. No DB/emails/live/deploy fuera de autorizaciones específicas; no findings ajenos.",
+        "acceptance": "Smoke real HTTPS en dominio aprobado pasa con email/login, R2/D1, CLI, entrega y grid; live verifier exit 0 con evidencia sin secretos. Verification: bun run portal:verify:live; exit 0 y evidence/customer-assets-portal/live.json con login/email HTTPS, upload→CLI→entrega→grid, aislamiento y revocación verificados",
+        "blocked_by": "T-CAP-005,G-cap-live"
+      }
+    }
+  ]
+}

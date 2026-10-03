@@ -11,15 +11,15 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-import { mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { RevisionManifestSchema, StudioCatalogSchema, computeRevisionRootHash, sha256Hex, type StudioCatalog } from '@videomaker/schemas';
+import { RevisionManifestSchema, StudioCatalogSchema, computeRevisionRootHash, sha256Hex, type CreatorBatchProgress, type StudioCatalog } from '@videomaker/schemas';
 import { StudioServiceError, storageObjectKeyForSha, type StudioStorage } from '@videomaker/studio';
 
 import { HTML_TEXT, HOSTILE_TITLE, MP4_BYTES, PNG_BYTES, PNG_THUMB_BYTES, SVG_TEXT, makeDashboardFixture, startTestDashboard, type DashboardFixture, type TestServer } from './fixtures';
-import { resolveSealedOutput, startDashboardServer } from './server';
+import { createDashboardApp, resolveSealedOutput, startDashboardServer } from './server';
 import { isTailscaleIpv4, readDashboardServeState, resolveDashboardUrl, writeDashboardServeState, type ListenerProbeResult } from './tailscale';
 
 /** Fake ss: a real all-interfaces LISTEN owned by the registered pid. */
@@ -834,5 +834,183 @@ describe('dashboard url (estado de serve + IPv4 Tailscale)', () => {
       closed = true;
     }
     expect(closed).toBe(true);
+  });
+});
+
+describe('opt-in operational dashboard seams (direct Request/Response, no listener)', () => {
+  test('default app retains health/UI policy and does not expose review or batch summary', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'vm-dashboard-default-'));
+    try {
+      const app = createDashboardApp({ workspaceDir: root });
+      const health = await app.fetch(new Request('http://dashboard.internal/health'));
+      expect(health.status).toBe(200);
+      expect((await envelopeOf(health)).ok).toBe(true);
+      const ui = await app.fetch(new Request('http://dashboard.internal/'));
+      expect(ui.status).toBe(200);
+      expect(ui.headers.get('content-security-policy')).toContain("script-src 'self'");
+      for (const route of ['/review/index.html', '/api/creator-batch/summary']) {
+        expect((await app.fetch(new Request(`http://dashboard.internal${route}`))).status).toBe(404);
+      }
+      const head = await app.fetch(new Request('http://dashboard.internal/health', { method: 'HEAD' }));
+      expect(head.status).toBe(200);
+      expect(Number(head.headers.get('content-length'))).toBeGreaterThan(0);
+      expect(await head.text()).toBe('');
+      expect((await app.fetch(new Request('http://dashboard.internal/health', { method: 'POST' }))).status).toBe(405);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('root UI reads only requested asset fresh and reports UTF-8 length without changing its CSP', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'vm-dashboard-ui-'));
+    try {
+      const app = createDashboardApp({ workspaceDir: root, uiDir: root });
+      for (const html of ['<p>á</p>', '<p>Texto actualizado con 😀 y tamaño diferente</p>']) {
+        // JS/CSS deliberately absent: fetching HTML does not preload unrelated assets.
+        await writeFile(path.join(root, 'index.html'), html);
+        const response = await app.fetch(new Request('http://dashboard.internal/'));
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-length')).toBe(String(new TextEncoder().encode(html).length));
+        expect(response.headers.get('content-security-policy')).toContain("script-src 'self'");
+        expect(response.headers.get('content-security-policy')).not.toContain('unsafe-inline');
+        expect(await response.text()).toBe(html);
+        const head = await app.fetch(new Request('http://dashboard.internal/index.html', { method: 'HEAD' }));
+        expect(head.headers.get('content-length')).toBe(String(new TextEncoder().encode(html).length));
+        expect(await head.text()).toBe('');
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('optional review delegates only exact declared finals and never permits mutation or encoded aliases', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'vm-dashboard-review-'));
+    try {
+      await mkdir(path.join(root, 'final'));
+      await writeFile(path.join(root, 'final', 'index.html'), '<p>Final revisado</p>');
+      await writeFile(path.join(root, 'final', 'sample.mp4'), MP4_BYTES);
+      const app = createDashboardApp({ workspaceDir: root, review: { rootDir: root, files: [
+        { route: '/review/index.html', path: 'final/index.html', mediaType: 'text/html' },
+        { route: '/review/sample.mp4', path: 'final/sample.mp4', mediaType: 'video/mp4' },
+      ] } });
+      const html = await app.fetch(new Request('http://dashboard.internal/review/index.html'));
+      expect(await html.text()).toBe('<p>Final revisado</p>');
+      expect(html.headers.get('content-security-policy')).toContain('sandbox');
+      const range = await app.fetch(new Request('http://dashboard.internal/review/sample.mp4', { headers: { range: 'bytes=1-3' } }));
+      expect(range.status).toBe(206);
+      expect(new Uint8Array(await range.arrayBuffer())).toEqual(MP4_BYTES.slice(1, 4));
+      const head = await app.fetch(new Request('http://dashboard.internal/review/sample.mp4', { method: 'HEAD', headers: { range: 'bytes=1-3' } }));
+      expect(head.status).toBe(200);
+      expect(head.headers.get('content-length')).toBe(String(MP4_BYTES.length));
+      expect(await head.text()).toBe('');
+      for (const route of ['/review', '/review/source.mp4', '/review/journal.html', '/review/%69ndex.html', '/r%65view/index.html', '/review/%252e%252e%2findex.html']) {
+        expect((await app.fetch(new Request(`http://dashboard.internal${route}`))).status).toBe(404);
+      }
+      expect((await app.fetch(new Request('http://dashboard.internal/review/index.html', { method: 'POST' }))).status).toBe(405);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('sealed video Range operates on fully hash-verified bytes; corruption cannot bypass checks', async () => {
+    const fixture = await makeDashboardFixture('vm-dashboard-range');
+    try {
+      const app = createDashboardApp({ workspaceDir: fixture.root });
+      const route = `http://dashboard.internal/api/files/${fixture.soloProjectId}/${fixture.videoAssetId}/${fixture.videoR1}/spot`;
+      const partial = await app.fetch(new Request(route, { headers: { range: 'bytes=1-3' } }));
+      expect(partial.status).toBe(206);
+      expect(partial.headers.get('content-range')).toBe(`bytes 1-3/${MP4_BYTES.length}`);
+      expect(partial.headers.get('content-length')).toBe('3');
+      expect(new Uint8Array(await partial.arrayBuffer())).toEqual(MP4_BYTES.slice(1, 4));
+      const head = await app.fetch(new Request(route, { method: 'HEAD', headers: { range: 'bytes=999-' } }));
+      expect(head.status).toBe(200);
+      expect(head.headers.get('content-length')).toBe(String(MP4_BYTES.length));
+      expect(await head.text()).toBe('');
+      await writeFile(path.join(fixture.root, 'revisions', fixture.soloProjectId, fixture.videoAssetId, fixture.videoR1, 'files', 'outputs', 'spot.mp4'), new Uint8Array([...MP4_BYTES, 1]));
+      const corrupt = await app.fetch(new Request(route, { headers: { range: 'bytes=1-3' } }));
+      expect(corrupt.status).toBe(409);
+      expect(errorOf(await envelopeOf(corrupt)).code).toBe('HASH_MISMATCH');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('manual batch snapshot route sanitizes private fields and exposes no implicit polling or POST', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'vm-dashboard-summary-'));
+    try {
+      const progress: CreatorBatchProgress = {
+        schemaVersion: 1,
+        manifest: { schemaVersion: 1, batchId: 'private-batch', queuePolicy: 'allow-provider-queue', projects: [{
+          projectPath: 'projects/private-clip', projectId: 'private-clip',
+          preset: { id: 'private-preset', version: 1, sha256: 'a'.repeat(64) },
+          approval: { approved: true, digest: 'b'.repeat(64) },
+          media: { videoSha256: 'c'.repeat(64), coverSha256: 'd'.repeat(64) },
+          targets: [{ platform: 'tiktok', accountId: 'private-account', username: 'private-user' }],
+        }] },
+        checkedAt: '2026-10-03T12:00:00Z',
+        targets: [{
+          projectId: 'private-clip', platform: 'tiktok', accountId: 'private-account', state: 'pending',
+          detail: 'private-provider-error', remoteId: 'private-remote',
+          url: 'https://www.tiktok.com/@example/video/1234567890',
+        }],
+        summary: { total: 1, published: 0, pending: 1, notStarted: 0, uncertain: 0, failed: 0, blocked: 0 },
+        complete: false, capacity: [], dependencies: [],
+      };
+      let reads = 0;
+      const app = createDashboardApp({ workspaceDir: root, creatorBatchProgress: async () => { reads += 1; return progress; } });
+      expect(reads).toBe(0);
+      const response = await app.fetch(new Request('http://dashboard.internal/api/creator-batch/summary'));
+      expect(reads).toBe(1);
+      const text = await response.text();
+      expect(response.status).toBe(200);
+      expect(text).not.toContain('private-');
+      expect(text).not.toContain('digest');
+      expect(text).not.toContain('sha256');
+      const payload = JSON.parse(text) as { ok: boolean; data: { checkedAt: string; complete: boolean; refresh: string; autoMonitoring: boolean; targets: { url?: string }[] } };
+      expect(payload.ok).toBe(true);
+      expect(payload.data.checkedAt).toBe(progress.checkedAt);
+      expect(payload.data.complete).toBe(false);
+      expect(payload.data.refresh).toBe('manual');
+      expect(payload.data.autoMonitoring).toBe(false);
+      expect(payload.data.targets[0]?.url).toBeUndefined(); // Pending is not a published public post.
+      const head = await app.fetch(new Request('http://dashboard.internal/api/creator-batch/summary', { method: 'HEAD' }));
+      expect(reads).toBe(2);
+      expect(head.status).toBe(200);
+      expect(Number(head.headers.get('content-length'))).toBeGreaterThan(0);
+      expect(await head.text()).toBe('');
+      for (const route of ['/api/creator-batch/summary/', '/api/creator-batch/%73ummary', '/api//creator-batch/summary']) {
+        expect((await app.fetch(new Request(`http://dashboard.internal${route}`))).status).toBe(404);
+      }
+      const post = await app.fetch(new Request('http://dashboard.internal/api/creator-batch/summary', { method: 'POST' }));
+      expect(post.status).toBe(405);
+      expect(reads).toBe(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('batch callback and validation failures fully redact even known service error details', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'vm-dashboard-redaction-'));
+    try {
+      const callbacks: (() => Promise<CreatorBatchProgress>)[] = [
+        async () => { throw new Error('PRIVATE-TOKEN /private/journal'); },
+        async () => { throw new StudioServiceError('INVALID_INPUT', 'PRIVATE-TOKEN', { credential: 'PRIVATE-TOKEN' }); },
+        async () => ({ secret: 'PRIVATE-TOKEN' }) as unknown as CreatorBatchProgress,
+      ];
+      for (const creatorBatchProgress of callbacks) {
+        const app = createDashboardApp({ workspaceDir: root, creatorBatchProgress });
+        const response = await app.fetch(new Request('http://dashboard.internal/api/creator-batch/summary'));
+        expect(response.status).toBe(500);
+        const text = await response.text();
+        expect(text).not.toContain('PRIVATE-TOKEN');
+        expect(text).not.toContain('credential');
+        expect(text).not.toContain('journal');
+        const payload = JSON.parse(text) as { error: { code: string; details?: unknown } };
+        expect(payload.error.code).toBe('INTERNAL');
+        expect(payload.error.details).toBeUndefined();
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

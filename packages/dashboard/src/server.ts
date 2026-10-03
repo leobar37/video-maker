@@ -25,6 +25,7 @@ import {
   OUTPUT_NAME_PATTERN,
   sha256Hex,
   StudioIdSchema,
+  type CreatorBatchProgress,
   type RevisionManifest,
   type SnapshotFile,
   type StudioCatalog,
@@ -40,6 +41,8 @@ import {
   StudioServiceError,
 } from '@videomaker/studio';
 import type { StudioContext, StudioStorage } from '@videomaker/studio';
+import { buildPublicCreatorBatchStatus } from './batch-status';
+import { createByteResponse, createReviewPreviewHandler, type ReviewPreviewConfig } from './review-preview';
 
 // ---------------------------------------------------------------------------
 // Error → HTTP mapping (stable public codes, redacted details)
@@ -336,18 +339,16 @@ export interface DashboardAppOptions {
   storage?: StudioStorage;
   /** UI static dir override (defaults to `../ui` next to this module). */
   uiDir?: string;
+  /** Optional, explicitly declared final-only files under /review. */
+  review?: ReviewPreviewConfig;
+  /** Current snapshot only: never starts provider polling or mutations. */
+  creatorBatchProgress?: () => Promise<CreatorBatchProgress>;
 }
 
 export interface DashboardApp {
   readonly studio: StudioContext;
   readonly storage: StudioStorage | undefined;
   fetch(request: Request): Promise<Response>;
-}
-
-interface UiAssets {
-  html: string;
-  js: string;
-  css: string;
 }
 
 const UI_CONTENT_TYPES: Record<string, string> = {
@@ -385,15 +386,8 @@ function envelopeError(error: unknown, extraHeaders: Record<string, string> = {}
 export function createDashboardApp(options: DashboardAppOptions): DashboardApp {
   const studio = createStudioContext(options.workspaceDir);
   const uiDir = options.uiDir ?? path.join(import.meta.dir, 'ui');
-  let uiAssets: Promise<UiAssets> | undefined;
-  const ui = (): Promise<UiAssets> => {
-    uiAssets ??= (async () => ({
-      html: await readFile(path.join(uiDir, 'index.html'), 'utf8'),
-      js: await readFile(path.join(uiDir, 'app.js'), 'utf8'),
-      css: await readFile(path.join(uiDir, 'styles.css'), 'utf8'),
-    }))();
-    return uiAssets;
-  };
+  const review = options.review === undefined ? undefined : createReviewPreviewHandler(options.review);
+  const creatorBatchProgress = options.creatorBatchProgress;
 
   const optionalFilter = (params: URLSearchParams, name: string): string | undefined => {
     const raw = params.get(name);
@@ -401,12 +395,10 @@ export function createDashboardApp(options: DashboardAppOptions): DashboardApp {
     return assertId(raw.trim(), `filter.${name}`);
   };
 
-  const uiResponse = async (assetName: 'index.html' | 'app.js' | 'styles.css'): Promise<Response> => {
-    const assets = await ui();
-    const body = assetName === 'index.html' ? assets.html : assetName === 'app.js' ? assets.js : assets.css;
-    return new Response(body, {
-      status: 200,
-      headers: { 'content-type': UI_CONTENT_TYPES[assetName]!, 'content-security-policy': UI_CSP, ...BASE_SECURITY_HEADERS },
+  const uiResponse = async (request: Request, assetName: 'index.html' | 'app.js' | 'styles.css'): Promise<Response> => {
+    const bytes = new Uint8Array(await readFile(path.join(uiDir, assetName)));
+    return createByteResponse(request, bytes, {
+      'content-type': UI_CONTENT_TYPES[assetName]!, 'content-security-policy': UI_CSP, ...BASE_SECURITY_HEADERS,
     });
   };
 
@@ -421,15 +413,12 @@ export function createDashboardApp(options: DashboardAppOptions): DashboardApp {
     const forceDownload = new URL(request.url).searchParams.get('download') === '1';
     const disposition = forceDownload ? 'attachment' : sealed.disposition;
     const charset = charsetFor(sealed.mediaType);
-    return new Response(sealed.bytes as unknown as BodyInit, {
-      status: 200,
-      headers: {
-        'content-type': charset === null ? sealed.mediaType : `${sealed.mediaType}; charset=${charset}`,
-        'content-disposition': `${disposition}; filename="${sealed.filename}"; filename*=UTF-8''${encodeURIComponent(sealed.filename)}`,
-        'content-security-policy': FILE_CSP,
-        ...BASE_SECURITY_HEADERS,
-      },
-    });
+    return createByteResponse(request, sealed.bytes, {
+      'content-type': charset === null ? sealed.mediaType : `${sealed.mediaType}; charset=${charset}`,
+      'content-disposition': `${disposition}; filename="${sealed.filename}"; filename*=UTF-8''${encodeURIComponent(sealed.filename)}`,
+      'content-security-policy': FILE_CSP,
+      ...BASE_SECURITY_HEADERS,
+    }, sealed.mediaType.startsWith('video/'));
   };
 
   const handle = async (request: Request): Promise<Response> => {
@@ -446,6 +435,17 @@ export function createDashboardApp(options: DashboardAppOptions): DashboardApp {
       );
     }
     const url = new URL(request.url);
+    if (review !== undefined && (url.pathname === '/review' || url.pathname.startsWith('/review/'))) {
+      return review(request);
+    }
+    if (url.pathname === '/api/creator-batch/summary' && creatorBatchProgress !== undefined) {
+      try {
+        return envelopeOk(buildPublicCreatorBatchStatus(await creatorBatchProgress()));
+      } catch {
+        // Neither provider failures nor validation issues may leak private data.
+        return envelopeError(new Error());
+      }
+    }
     let segments: string[];
     try {
       segments = url.pathname
@@ -453,13 +453,13 @@ export function createDashboardApp(options: DashboardAppOptions): DashboardApp {
         .filter((segment) => segment.length > 0)
         .map((segment) => decodeURIComponent(segment));
     } catch {
-      return envelopeError(fail('INVALID_INPUT', 'Ruta con escapes inválidos.'));
+      return envelopeError(new StudioServiceError('INVALID_INPUT', 'Ruta con escapes inválidos.'));
     }
 
     try {
-      if (segments.length === 0 || (segments.length === 1 && segments[0] === 'index.html')) return await uiResponse('index.html');
+      if (segments.length === 0 || (segments.length === 1 && segments[0] === 'index.html')) return await uiResponse(request, 'index.html');
       if (segments.length === 1 && (segments[0] === 'app.js' || segments[0] === 'styles.css')) {
-        return await uiResponse(segments[0] as 'app.js' | 'styles.css');
+        return await uiResponse(request, segments[0] as 'app.js' | 'styles.css');
       }
       if (segments.length === 1 && segments[0] === 'health') {
         // No credentials, no storage, no workspace scanning (NFR-002).
@@ -510,7 +510,17 @@ export function createDashboardApp(options: DashboardAppOptions): DashboardApp {
     }
   };
 
-  return { studio, storage: options.storage, fetch: handle };
+  return {
+    studio,
+    storage: options.storage,
+    fetch: async (request) => {
+      const response = await handle(request);
+      if (request.method.toUpperCase() !== 'HEAD') return response;
+      const headers = new Headers(response.headers);
+      if (!headers.has('content-length')) headers.set('content-length', String((await response.arrayBuffer()).byteLength));
+      return new Response(null, { status: response.status, headers });
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

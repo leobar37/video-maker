@@ -72,9 +72,42 @@ export const CreatorTikTokEnvelopeSchema = z.object({
   }),
 });
 export type CreatorTikTokCapability = z.infer<typeof CreatorTikTokEnvelopeSchema>;
+/** Durable payload proof contains no credentials, headers or provider response. */
+export const CreatorIntentEvidenceSchema = z.object({
+  profileId: z.string().min(1),
+  content: z.string(),
+  videoUrl: z.string().url().refine(isHttpsPublicUrl, 'HTTPS public media URL required'),
+  coverUrl: z.string().url().refine(isHttpsPublicUrl, 'HTTPS public media URL required'),
+  submittedAt: z.string().datetime(),
+}).strict();
+export type CreatorIntentEvidence = z.infer<typeof CreatorIntentEvidenceSchema>;
+
+function isHttpsPublicUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password) return false;
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (!hostname.includes('.') && !hostname.startsWith('[')) return false;
+    if (hostname === 'localhost' || /\.(?:localhost|local|internal)$/.test(hostname)) return false;
+    if (hostname.startsWith('[')) {
+      // Only global-unicast IPv6 literals; exclude documentation addresses.
+      return /^\[[23][a-f0-9]{0,3}:/.test(hostname) && !hostname.startsWith('[2001:db8:');
+    }
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      const [a = 0, b = 0] = hostname.split('.').map(Number);
+      return a !== 0 && a !== 10 && a !== 127 && a < 224 &&
+        !(a === 100 && b >= 64 && b <= 127) && !(a === 169 && b === 254) &&
+        !(a === 172 && b >= 16 && b <= 31) && !(a === 192 && (b === 168 || b === 0)) &&
+        !(a === 198 && (b === 18 || b === 19));
+    }
+    return true;
+  } catch { return false; }
+}
+
 export const CreatorIntentSchema = z.object({
   schemaVersion: z.literal(1), idempotencyKey: z.string().regex(/^creator:[a-f0-9]{64}$/),
   platform: CreatorPlatformSchema, accountId: z.string().min(1), projectId: z.string(), videoSha256: hash, digest: hash,
+  evidence: CreatorIntentEvidenceSchema.optional(),
 }).strict();
 export type CreatorIntent = z.infer<typeof CreatorIntentSchema>;
 export const CreatorTargetResultSchema = z.object({

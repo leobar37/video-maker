@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "transcript": "../source/transcript.json",
+  "audience": "Fundadores que están validando su primer producto",
+  "objective": "Aprendizajes concretos y comprensibles sin contexto previo",
+  "maxClips": 3,
+  "duration": { "minSec": 20, "maxSec": 60 },
+  "maxCandidates": 12,
+  "model": "jev-1.13.0",
+  "timeoutMs": 10000,
+  "deadlineMs": 120000
+}

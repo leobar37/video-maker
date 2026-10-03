@@ -1,0 +1,53 @@
+{
+  "scope": "planning-only; no execution authorized",
+  "defaults": {
+    "runtime": "TanStack Start React on Cloudflare Workers",
+    "database": "D1 through Drizzle; probe required",
+    "auth": "invite-only Better Auth magic link; server-authorized provisioning",
+    "agentAuth": "Better Auth API key without session impersonation; explicit grants",
+    "studioAuthority": "local domain/manifests remain canonical; portal is delivery projection",
+    "storage": "separate private portal R2; authenticated proxy and staging",
+    "deliveryVisibility": "internal by default; human admin only can expose",
+    "v1Formats": {
+      "images": [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ],
+      "imageMaxMiB": 20,
+      "video": [
+        "video/mp4"
+      ],
+      "videoMaxMiB": 50,
+      "clientQuotaGiB": 1
+    },
+    "excluded": [
+      "social publication",
+      "client approval/comments",
+      "automatic generation",
+      "HEIC conversion",
+      "remote GC",
+      "mass migration"
+    ],
+    "execution": "serial one mutable worker; shared changes need integration owner"
+  },
+  "unresolved": [
+    {
+      "decision": "pinned versions and runtime proof",
+      "owner": "P-001"
+    },
+    {
+      "decision": "Cloudflare account/resources/domain/email sender/live request+byte budget",
+      "owner": "human operator before G-cap-live"
+    },
+    {
+      "decision": "exact OMP profile and spending/turn budget",
+      "owner": "human operator at launcher preparation"
+    },
+    {
+      "decision": "real pilot client/workspace/contact",
+      "owner": "human operator; synthetic fixtures until assigned"
+    }
+  ],
+  "automation": "Declarative operator decisions only; not a supervisor match/action schema. Do not auto-resolve gates from this file."
+}

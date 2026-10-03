@@ -84,9 +84,19 @@ export {
   duplicatePostId,
   extractCreatedPost,
   extractFirstListedPost,
+  extractListedPosts,
+  extractReceiptPostId,
+  isIdempotencyConflict,
   postUrlOf,
+  targetReceiptOf,
 } from './zernio/post-response';
-export type { CreatedPlatform, CreatedPost } from './zernio/post-response';
+export type {
+  CreatedMediaItem,
+  CreatedPlatform,
+  CreatedPost,
+  ReceiptTarget,
+  TargetReceipt,
+} from './zernio/post-response';
 
 // Publish / status / reconcile
 export {
@@ -104,7 +114,13 @@ export {
   remoteReconcileLookup,
   statusByKey,
 } from './zernio/status';
-export type { ReconcileFinding, ReconcileLookup, StatusOptions } from './zernio/status';
+export type {
+  ReconcileFinding,
+  ReconcileLookup,
+  RemotePostEvidence,
+  RemoteReconcileOptions,
+  StatusOptions,
+} from './zernio/status';
 
 // Distribution (social-track)
 export {

@@ -3,12 +3,11 @@
  *
  * Semantics (one live submit per idempotency key — never auto-retry):
  * - the wire attempt is journalled per attempt with its outcome;
- * - `published` — 2xx with a post id: the receipt (remote id + URL) is proven;
- * - `accepted` — HTTP 409 dedupe: the post already exists remotely
- *   (`existingPostId`); that is success, not a failure, and is never re-sent;
- * - `failed` — a definite non-2xx rejection: nothing went out;
- * - `uncertain` — no receipt (2xx without a post id, or a transport error
- *   where the request may have landed): the attempt BLOCKS every further
+ * - `published` — explicit publication evidence for the requested target;
+ * - `accepted` — a queued target receipt, or HTTP 409 dedupe; never re-sent;
+ * - `failed` — a definite rejection or explicitly failed target;
+ * - `uncertain` — unknown/missing target receipt, or a transport error
+ *   where the request may have landed: the attempt BLOCKS every further
  *   submit for the key until `reconcile` resolves it. A missing receipt is
  *   never papered over with a retry — the retry could double-post.
  *
@@ -31,7 +30,13 @@ import {
   type PublicationJournalEntry,
   type PublicationJournalStore,
 } from './journal';
-import { duplicatePostId, extractCreatedPost, postUrlOf } from './post-response';
+import {
+  duplicatePostId,
+  extractCreatedPost,
+  extractReceiptPostId,
+  isIdempotencyConflict,
+  targetReceiptOf,
+} from './post-response';
 import { reconcileByKey, statusByKey, type ReconcileLookup } from './status';
 
 /** Timezone used when scheduling without one (operator's zone). */
@@ -235,7 +240,7 @@ export class ZernioPublisher implements Publisher {
         body,
         idempotencyKey,
       });
-    } catch (err) {
+    } catch {
       // The request may or may not have landed: no receipt, so the attempt is
       // uncertain and blocks the key until reconciled.
       const entry: PublicationJournalEntry = {
@@ -244,7 +249,7 @@ export class ZernioPublisher implements Publisher {
         attempt,
         outcome: 'uncertain',
         at: at(),
-        detail: `transport error before a response: ${(err as Error).message}`,
+        detail: 'transport error before a response; remote outcome unknown — reconcile required',
       };
       await this.#journal.append(entry);
       return outcomeOf(entry);
@@ -268,49 +273,45 @@ export class ZernioPublisher implements Publisher {
     }
 
     const created = extractCreatedPost(response.body);
-    if ((response.status === 200 || response.status === 201) && created) {
+    const recognizedReceiptStatus = [200, 201, 202, 207].includes(response.status);
+    const conflict = isIdempotencyConflict(response.status, response.body);
+    if (recognizedReceiptStatus || (response.status >= 200 && response.status < 300) || conflict) {
+      const receipt = recognizedReceiptStatus && created
+        ? targetReceiptOf(created, { ...target, profileId: post.profileId }) : undefined;
+      const remoteId = created?.id ?? extractReceiptPostId(response.body);
       const entry: PublicationJournalEntry = {
         schemaVersion: 1,
         idempotencyKey,
         attempt,
-        outcome: !post.profileId ? 'published'
-          : created.platforms.some((platform) => platform.platform === target.platform && platform.status === 'failed') ? 'failed'
-          : created.platforms.some((platform) => platform.platform === target.platform && platform.status === 'published') ? 'published'
-          : 'accepted',
+        outcome: receipt?.outcome ?? 'uncertain',
         at: at(),
-        remoteId: created.id,
-        url: postUrlOf(created),
-        detail: `POST /posts → HTTP ${response.status}`,
+        remoteId,
+        url: receipt?.url,
+        detail: `POST /posts → HTTP ${response.status}: ${receipt?.detail ?? (conflict
+          ? 'original idempotent request is still processing; reconcile required'
+          : 'no receipt proving target state; the remote outcome is unknown — reconcile required')}`,
       };
       await this.#journal.append(entry);
       return outcomeOf(entry);
     }
 
-    if (response.status === 200 || response.status === 201) {
-      // 2xx without a receipt: the post may exist remotely — uncertain.
-      const entry: PublicationJournalEntry = {
-        schemaVersion: 1,
-        idempotencyKey,
-        attempt,
-        outcome: 'uncertain',
-        at: at(),
-        detail:
-          `POST /posts → HTTP ${response.status} without a post id: no receipt; ` +
-          'the remote outcome is unknown — reconcile required',
-      };
-      await this.#journal.append(entry);
-      return outcomeOf(entry);
-    }
-
+    // Only recognized ordinary client rejections establish failure. Timeouts,
+    // conflicts, server failures and undocumented statuses may have landed.
+    const remoteId = created?.id ?? extractReceiptPostId(response.body);
+    const definiteRejection = [
+      400, 401, 403, 404, 405, 406, 410, 411, 412, 413, 414, 415,
+      416, 417, 421, 422, 423, 424, 425, 426, 428, 429, 431, 451,
+    ].includes(response.status) && !remoteId;
     const entry: PublicationJournalEntry = {
       schemaVersion: 1,
       idempotencyKey,
       attempt,
-      outcome: post.profileId && response.status >= 500 ? 'uncertain' : 'failed',
+      outcome: definiteRejection ? 'failed' : 'uncertain',
       at: at(),
-      detail: post.profileId && response.status >= 500
-        ? `POST /posts → HTTP ${response.status}: server outcome uncertain; do not resubmit`
-        : `POST /posts → HTTP ${response.status}: definite rejection, nothing went out`,
+      remoteId,
+      detail: definiteRejection
+        ? `POST /posts → HTTP ${response.status}: definite rejection, nothing went out`
+        : `POST /posts → HTTP ${response.status}: remote outcome unknown — reconcile required; do not resubmit`,
     };
     await this.#journal.append(entry);
     return outcomeOf(entry);

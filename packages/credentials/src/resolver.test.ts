@@ -40,6 +40,7 @@ const DOPPLER_PAYLOAD = {
   FAL_KEY: 'doppler-fal-secret',
   ZERNIO_API_KEY: 'doppler-zernio-secret',
   ELEVENLABS_API_KEY: 'doppler-eleven-secret',
+  TYPE_SAFE_AI: 'doppler-typesafe-secret',
   R2_ACCESS_KEY_ID: 'doppler-access-key',
   R2_SECRET_ACCESS_KEY: 'doppler-secret-key',
   R2_ENDPOINT: 'https://acct123.r2.cloudflarestorage.com',
@@ -177,6 +178,7 @@ describe('env → .env → Doppler precedence', () => {
     expect(await resolveCredentials('FAL_KEY', opts)).toBe('env-fal-secret');
     expect(await resolveCredentials('ELEVENLABS_API_KEY', opts)).toBe('doppler-eleven-secret');
     expect(await resolveCredentials('ZERNIO_API_KEY', opts)).toBe('doppler-zernio-secret');
+    expect(await resolveCredentials('TYPE_SAFE_AI', opts)).toBe('doppler-typesafe-secret');
     expect(calls).toHaveLength(1);
   });
 
@@ -480,6 +482,7 @@ describe('credentialReport', () => {
       'FAL_KEY',
       'ZERNIO_API_KEY',
       'ELEVENLABS_API_KEY',
+      'TYPE_SAFE_AI',
       'R2_ACCESS_KEY_ID',
       'R2_SECRET_ACCESS_KEY',
       'R2_ENDPOINT',

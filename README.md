@@ -23,6 +23,38 @@ bun run build
 bun run credentials:probe   # imprime solo nombres y longitudes, nunca valores
 ```
 
+## Selección editorial con Typesafe
+
+`clips-select` lee una solicitud JSON y un transcript con segmentos temporales,
+genera ventanas continuas, evalúa 4 Score + 2 Noul por candidato y guarda
+`clip-selection.result.json` y `clip-selection.report.mdx` junto a la solicitud.
+Ejemplo ficticio incluido en `demo/clip-selection/`:
+
+```bash
+# Offline: valida entradas y muestra candidatas, salidas y reserva máxima.
+bun run vm clips-select --project demo/clip-selection --request analysis/clip-selection.request.json --dry-run
+
+# Ejecución real: requiere TYPE_SAFE_AI; env/.env/Doppler elena-tech/prd, nunca en el JSON.
+# --submit autoriza enviar texto a Typesafe. No se ejecutó durante el desarrollo.
+bun run vm clips-select --project demo/clip-selection --request analysis/clip-selection.request.json --submit --spend-cap 0.05
+```
+
+Las rutas del request son relativas a `--project`; `transcript` es relativo al
+archivo de solicitud y debe permanecer dentro del proyecto. Contratos:
+`packages/schemas/src/clip-selection.ts`. Solo `jev-1.13.0`, con precio fijado
+documentado de $0.042/M tokens de entrada y salida gratuita; comprobar su vigencia
+antes de usarlo. El presupuesto reserva hasta 64k tokens por llamada y el ledger
+registra después el coste conocido. Caché verificable por entradas y rúbrica:
+una repetición completa puede ejecutarse con `--spend-cap 0`, sin `--submit`.
+Errores de evaluación producen resultado parcial y salida 1; una llamada incierta
+no se reenvía automáticamente. Un lock abandonado requiere revisar el ledger
+antes de retirarlo, no borrar evidencia para forzar otra llamada.
+
+El comando no modifica los originales, no corta, no genera títulos ni aprueba
+publicaciones. Los rangos requieren revisión de audio/video. El transcript debe
+tener `schemaVersion`, `videoId`, `language`, `durationSec` y segmentos
+`{id,startSec,endSec,speaker,text}` ordenados y sin solapamiento.
+
 ## Workflow compartido por clientes y redes
 
 Guía común: [edición → QA → aprobación → publicación](docs/creator-workflow.md).

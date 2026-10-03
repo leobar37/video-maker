@@ -8,8 +8,13 @@
  * resolve env → project `.env` → Doppler like every other name here.
  */
 
-/** Media-provider API keys (env → project `.env` → Doppler). */
-export const CREDENTIAL_NAMES = ['FAL_KEY', 'ZERNIO_API_KEY', 'ELEVENLABS_API_KEY'] as const;
+/** Provider API keys (env → project `.env` → Doppler). */
+export const CREDENTIAL_NAMES = [
+  'FAL_KEY',
+  'ZERNIO_API_KEY',
+  'ELEVENLABS_API_KEY',
+  'TYPE_SAFE_AI',
+] as const;
 export type CredentialName = (typeof CREDENTIAL_NAMES)[number];
 
 /** R2 contract keys that are always required (env → `.env` → Doppler). */

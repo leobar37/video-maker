@@ -2024,6 +2024,7 @@ import {
   buildClipFilmProps,
   trimClipMedia,
 } from '../pipeline/clip';
+import { assertClipPilotReady } from '../creator/pilot';
 
 /**
  * Remotion entry bundled for clip renders. `runAssemble` bundles the
@@ -2385,6 +2386,13 @@ export function buildClipRenderSpecs(deps: MediaCommandDeps = defaultMediaDeps()
           words: await readTranscriptWords(projectDir),
           sourceSize: { width, height },
         };
+        await assertClipPilotReady({
+          projectDir,
+          decisions,
+          selectedRanges: selection,
+          words: context.words,
+          frames: context.analyses,
+        });
         for (const range of selection) {
           await renderApprovedClip({ deps, context, range, out: ctx.out });
         }

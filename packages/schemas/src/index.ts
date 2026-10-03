@@ -10,6 +10,7 @@ export * from './narration';
 export * from './catalog';
 export * from './clip';
 export * from './studio';
+export * from './clip-selection';
 export {
   CreatorPlatformSchema, CreatorPresetSchema, CreatorDraftSchema, CreatorProjectSchema,
   CreatorQaSchema, CreatorProbeSchema, CreatorTikTokInfoSchema, CreatorTikTokEnvelopeSchema,
@@ -17,6 +18,9 @@ export {
   type CreatorPreset, type CreatorDraft, type CreatorProject, type CreatorMediaQa,
   type CreatorIntent, type CreatorTargetResult, type CreatorTikTokCapability,
 } from './creator';
+export * from './creator-batch';
+export * from './creator-preflight';
+export * from './creator-pilot';
 
 /**
  * Current (latest) `schemaVersion` per contract. Older versions remain
@@ -34,6 +38,13 @@ export const SCHEMA_VERSIONS = {
   scoringWeights: 1,
   clipRange: 1,
   clipDecision: 1,
+  clipSelectionRequest: 1,
+  clipSelectionTranscript: 1,
+  clipSelectionResult: 2,
+  creatorBatchManifest: 1,
+  creatorBatchProgress: 1,
+  clipPilotPolicy: 1,
+  clipPilotEvidence: 1,
   studioClient: 1,
   studioPresetVersion: 1,
   studioProject: 1,

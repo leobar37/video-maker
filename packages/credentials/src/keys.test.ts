@@ -13,8 +13,10 @@ import {
 } from './keys';
 
 describe('credential name registries', () => {
-  test('known credential names cover media providers', () => {
-    expect([...CREDENTIAL_NAMES]).toEqual(['FAL_KEY', 'ZERNIO_API_KEY', 'ELEVENLABS_API_KEY']);
+  test('known credential names cover media and evaluation providers', () => {
+    expect([...CREDENTIAL_NAMES]).toEqual([
+      'FAL_KEY', 'ZERNIO_API_KEY', 'ELEVENLABS_API_KEY', 'TYPE_SAFE_AI',
+    ]);
   });
 
   test('the R2 contract has no R2_ACCOUNT_ID: it is derived from the endpoint', () => {

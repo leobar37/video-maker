@@ -1,0 +1,67 @@
+[
+  {
+    "label": "positive-word-edges-duo-reaction-camera",
+    "expectedOk": true,
+    "ok": true,
+    "problems": []
+  },
+  {
+    "label": "negative-word-edge-cut",
+    "expectedOk": false,
+    "ok": false,
+    "problems": [
+      "Cut bisects word 0.",
+      "Missing exact boundary frame at 0.5."
+    ]
+  },
+  {
+    "label": "negative-truncated-reaction",
+    "expectedOk": false,
+    "ok": false,
+    "problems": [
+      "Required reaction window truncated or invalid."
+    ]
+  },
+  {
+    "label": "negative-camera-frame-mismatch",
+    "expectedOk": false,
+    "ok": false,
+    "problems": [
+      "Invalid exact EDL frame/time evidence at 2.",
+      "Camera switch f-000002 missing from EDL."
+    ]
+  },
+  {
+    "label": "negative-listener-lost-at-switch",
+    "expectedOk": false,
+    "ok": false,
+    "problems": [
+      "Duo face/framing evidence missing at f-000002.",
+      "Reaction face retention not established at f-000002."
+    ]
+  },
+  {
+    "label": "negative-unsafe-crop",
+    "expectedOk": false,
+    "ok": false,
+    "problems": [
+      "Conservative safe framing must be reviewed."
+    ]
+  },
+  {
+    "label": "negative-missing-transcript",
+    "expectedOk": false,
+    "ok": false,
+    "problems": [
+      "Missing word evidence for burned subtitles."
+    ]
+  },
+  {
+    "label": "negative-disputed-transcript",
+    "expectedOk": false,
+    "ok": false,
+    "problems": [
+      "Disputed word 2 cannot justify burned subtitles."
+    ]
+  }
+]

@@ -89,6 +89,17 @@ export class FileSpendLedger implements PaidOperationStore {
     return (await this.list()).find((record) => record.attemptId === attemptId);
   }
 
+  /** Validated append history, without collapsing distinct journal events. */
+  async history(filter?: PaidOperationFilter): Promise<PaidOperationRecord[]> {
+    const file = await readLedgerFile(this.path);
+    return file.attempts.filter(
+      (record) =>
+        (filter?.planDigest === undefined || record.planDigest === filter.planDigest) &&
+        (filter?.subject === undefined || record.subject === filter.subject) &&
+        (filter?.state === undefined || record.state === filter.state),
+    );
+  }
+
   async list(filter?: PaidOperationFilter): Promise<PaidOperationRecord[]> {
     const file = await readLedgerFile(this.path);
     const latest = new Map<string, PaidOperationRecord>();

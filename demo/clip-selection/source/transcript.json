@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "videoId": "demo-validacion-ficticia",
+  "language": "es",
+  "durationSec": 180,
+  "segments": [
+    {
+      "id": "s001", "startSec": 0, "endSec": 20, "speaker": "A",
+      "text": "Bienvenidos. Hoy hablaremos de validar un producto antes de invertir meses construyéndolo. Este transcript es ficticio y sirve para demostrar el selector."
+    },
+    {
+      "id": "s002", "startSec": 20, "endSec": 40, "speaker": "A",
+      "text": "Si nadie te paga por la versión pequeña, construir la versión grande no te va a salvar. Nosotros tardamos tres meses en entenderlo."
+    },
+    {
+      "id": "s003", "startSec": 40, "endSec": 60, "speaker": "A",
+      "text": "Dejamos de preguntar si les gustaba y empezamos a pedir un compromiso: una reserva, una llamada con quien decide o un pago. No necesitábamos más features; necesitábamos una señal de que el problema dolía lo suficiente."
+    },
+    {
+      "id": "s004", "startSec": 80, "endSec": 100, "speaker": "A",
+      "text": "No preguntes si usarían tu producto. Pregunta qué hicieron la última vez que tuvieron ese problema. Una persona había pasado el domingo cruzando tres hojas de cálculo."
+    },
+    {
+      "id": "s005", "startSec": 100, "endSec": 120, "speaker": "A",
+      "text": "Eso nos dijo más que veinte respuestas de suena interesante. Si ya están pagando con tiempo, dinero o esfuerzo, tienes una pista real. Investiga ese comportamiento antes de enseñar tu solución."
+    },
+    {
+      "id": "s006", "startSec": 140, "endSec": 160, "speaker": "A",
+      "text": "El precio también es un experimento. Cambia una variable, observa el comportamiento y no confundas curiosidad con demanda."
+    },
+    {
+      "id": "s007", "startSec": 160, "endSec": 180, "speaker": "A",
+      "text": "Recuerda que perder registros no siempre significa perder clientes. Mira los compromisos reales y vuelve a hablar con quienes necesitan resolver el problema."
+    }
+  ]
+}

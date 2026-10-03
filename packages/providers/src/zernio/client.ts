@@ -44,7 +44,7 @@ export class ZernioTransportError extends Error {
     readonly path: string,
     cause: unknown,
   ) {
-    super(`Zernio ${method} ${path} failed before a response: ${(cause as Error).message}`);
+    super(`Zernio ${method} ${path} failed before a response: transport outcome unknown`);
     this.name = 'ZernioTransportError';
     this.cause = cause;
   }

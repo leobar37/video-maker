@@ -1,0 +1,1 @@
+orchestrate customer-assets-portal siguiendo .plans/customer-assets-portal/goal.md y las seis fases; verificar gates antes de edits, DB emulado y nube; aceptar solo tras reproducir verification offline y smoke HTTPS live en customers-assets.theelena.me; sin permiso live mantener P-006 y goal blocked, sin ampliar scope ni publicar en redes.

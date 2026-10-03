@@ -5,6 +5,7 @@
 export * from './ports';
 export * from './index-media';
 export * from './index-infra';
+export * from './typesafe';
 
 // Disambiguate helper names duplicated across the media and infra surfaces
 // (different signatures): explicit re-exports resolve the star-export clash.
