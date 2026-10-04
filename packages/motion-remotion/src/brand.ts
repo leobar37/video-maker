@@ -267,8 +267,34 @@ export const rafaelTokens: BrandTokens = {
   tagline: 'El gigante verde contra la corrupción.',
 };
 
+/**
+ * DEEX Store — catálogo de audio, tecnología y hogar.
+ *
+ * Tokens tomados de la paleta real de la web (`assets/deex-palette.json`,
+ * snapshot del diseño actual; no es un rebranding). El naranja vive en el
+ * acento (punto de marca, keylines, chips y CTA), nunca como fondo completo;
+ * el lienzo es el papel cálido #FAF9F6 con tinta #171B19.
+ */
+const DEEX_ACCENT = '#ED642E';
+
+export const deexTokens: BrandTokens = {
+  whenToUse:
+    'Videos promocionales de DEEX Store: audio, tecnología y hogar para compradores del catálogo DEEX.',
+  brandName: 'DEEX',
+  canvas: { from: '#FAF9F6', to: '#F1ECE4', angle: 165 },
+  ink: '#171B19',
+  accent: DEEX_ACCENT,
+  glow: hexToRgba(DEEX_ACCENT, GLOW_ALPHA),
+  brandGradient: { from: DEEX_ACCENT, to: '#A3320C' },
+  mode: 'light',
+  fontDisplay: 'Arial, Helvetica, sans-serif',
+  fontBody: 'Arial, Helvetica, sans-serif',
+  tagline: 'Audio, tecnología y favoritos para tu hogar.',
+};
+
 /** Registry of available presets, keyed by the `branding.preset` in a project's config. */
 export const brandPresets = {
+  deex: deexTokens,
   avileo: avileoTokens,
   elena: elenaTokens,
   gymspace: gymspaceTokens,
