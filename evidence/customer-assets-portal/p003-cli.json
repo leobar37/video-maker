@@ -1,0 +1,41 @@
+{
+  "phase": "P-003",
+  "initiative": "customer-assets-portal",
+  "date": "2026-10-04",
+  "environment": {
+    "bun": "1.4.2",
+    "typescript": "tsc --noEmit (workspace build config)",
+    "network": "G-cap-live respected: CLI HTTP layer tested ONLY against an in-process fake origin on 127.0.0.1:0 (ephemeral loopback, no DNS, no real origins, no real credentials); apps/customer-assets worker tests run on emulated D1/R2 via cloudflare:test"
+  },
+  "commands": [
+    { "cmd": "bun test packages/customer-assets packages/cli/src/specs/portal.test.ts packages/cli/src/portal packages/cli/src/runtime.test.ts packages/cli/src/specs/studio.test.ts", "exit": 0 },
+    { "cmd": "bun run build", "exit": 0 },
+    { "cmd": "bun run --cwd apps/customer-assets test:worker", "exit": 0 }
+  ],
+  "counts": {
+    "files": 5,
+    "pass": 86,
+    "fail": 0,
+    "skip": 0,
+    "detail": "86 tests across 5 test files: packages/cli/src/specs/portal.test.ts (19: registry 2, reads/pagination/auth-failures 8, plan-only mutations 4, e2e+legacy-guards 5), packages/cli/src/portal/bridge.test.ts (13), packages/cli/src/portal/auth.test.ts (7), packages/cli/src/runtime.test.ts (legacy, unchanged), packages/cli/src/specs/studio.test.ts (legacy, unchanged). packages/customer-assets has no test files by design (its behavioral suite is apps/customer-assets). Regression guard: apps/customer-assets test:worker = 73/73 passed across 6 files.",
+    "workerRegression": { "files": 6, "pass": 73, "fail": 0 }
+  },
+  "fixtureSha256": {
+    "png-1x1 (70 B, valid PNG signature used as material/output bytes)": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
+    "jpeg-magic (18 B synthetic FF D8 FF APP0 fixture)": "27d4db16aaf70bb35dff9311f7304d69e52125f051220eb7e2ed1757d9f547fd"
+  },
+  "notes": [
+    "Contracts preserved: packages/schemas, packages/studio, packages/dashboard untouched; packages/cli/src/{runtime,spec-types,args,registry}.ts and specs/studio*.ts untouched (zero runtime hooks needed).",
+    "Shared edits: (1) packages/cli/src/all-specs.ts — registry only: import { portalSpecs } from './specs/portal' + '...portalSpecs' spread before versionSpec; (2) packages/cli/package.json — added dependency \"@videomaker/customer-assets\": \"workspace:*\" (node_modules symlink already existed).",
+    "SDK packages/customer-assets/src/{client,contracts}.ts: NOT extended — existing me/listClients/adoptClient/listMaterials/getMaterial/getMaterialContent/createDelivery/initUpload/putUploadContent/completeDelivery/listAssets cover §7 exactly.",
+    "Credential discipline: CUSTOMER_ASSETS_API_KEY read lazily only inside run() execution paths; plan mode (no --execute or --plan/--dry-run) proven to perform zero fetches (fake-origin request log empty), zero workspace writes (before/after tree snapshots) and zero credential use (sentinel key value never appears in output), even with the env var set.",
+    "Origin discipline: --origin mandatory, explicit https only; http accepted solely for loopback hosts (127.0.0.1/localhost/[::1]) so local fake origins work under G-cap-live. 302 redirect probe: exactly one request attempted, no credential forwarded, operational failure exit 1.",
+    "material-pull: confined temp under <workspace>/.vm/tmp (pruned from seals), sha256+bytes+magic verification before any asset write, exclusive-create input 'inputs/portal/<materialId>-<sha8><ext>' + deterministic provenance sidecar (no credentials/timestamps → byte-stable retries), asset.json update under the same lock file as studio snapshotAsset with schema re-validation and atomic rename; project must already relate to the material's studio client (no implicit project/asset creation).",
+    "delivery-push: sealed manifest read via studio service; rootHash re-verified with the existing pure module (computeRevisionRootHash) BEFORE any network (tamper → HASH_MISMATCH, zero requests); local bytes of ONLY the selected outputs verified (missing → OUTPUT_MISSING, drift → HASH_MISMATCH); stable idempotency keys for createDelivery + per-output initUpload; re-PUT after a mid-flight failure is rejected server-side (409 'already received') so bytes are stored exactly once; r1 sealed bytes proven unchanged after r2 work and r2 push; only declared outputs travel (no sources/recipe/manifests/.env — asserted against every request body).",
+    "Exit/envelope table verified: success 0; remote 401 (expired/revoked) → UNAUTHORIZED exit 1; 403 scope → FORBIDDEN exit 1; 404 → NOT_FOUND exit 2; missing credential → AUTH_REQUIRED exit 1 before any request; usage (bad/missing origin, unknown output, bad --limit) → INVALID_INPUT exit 2; --json prints exactly one envelope document.",
+    "Legacy compatibility: runtime.test.ts and specs/studio.test.ts pass unchanged (73 legacy tests inside the 86); portal verbs are flat kebab names and never enter studio grouped-verb normalization.",
+    "Known quirk documented: bun 1.4.2 test runner — toMatchObject writes nested asymmetric matchers back into the received object; tests extract fields before matcher assertions.",
+    "No tokens, keys, cookies or credentialed URLs are recorded in this evidence. The fake origin is loopback-only and never shared."
+  ],
+  "blockers": []
+}

@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-05",
+  "phase": "post-G-001 (operator-ordered feature: CLI-minted access links)",
+  "unit": "Accesos vía CLI: link single-use con vencimiento para miembros de cliente (CAP:access-links)",
+  "operatorMandate": "\"via CLI damos acceso al sistema: podemos crear un link con un token que vence en tal fecha\" — mint admin/integrador, entrega por canal propio (WhatsApp, etc.), sin email del portal.",
+  "environment": {
+    "worktree": "/home/leobar37/.herdr/worktrees/video-maker/customer-assets-portal (feat/customer-assets-portal)",
+    "runtime": "offline only: emulated Workers (Miniflare via @cloudflare/vitest-plugin) + in-process fake portal origin 127.0.0.1:0 for CLI suites; zero real network, zero deploys",
+    "bun": "1.4.2",
+    "deploy": "NOT performed by this unit — coordinator deploys and verifies live"
+  },
+  "pinnedVersions": "no dependencies added or bumped (better-auth stays 1.7.7)",
+  "commands": [
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:worker",
+      "exit": 0,
+      "detail": "7 files passed, 82 tests passed (74 previos + 8 nuevos de tests/access-links.test.ts), 0 failed"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets typecheck",
+      "exit": 0,
+      "detail": "tsc --noEmit -p tsconfig.json clean"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets build",
+      "exit": 0,
+      "detail": "vite build dist/client + dist/server ok"
+    },
+    {
+      "cmd": "bun test packages/customer-assets packages/cli/src/specs/portal.test.ts packages/cli/src/portal packages/cli/src/runtime.test.ts packages/cli/src/specs/studio.test.ts",
+      "exit": 0,
+      "detail": "5 files, 90 tests passed (portal.test.ts incluye los 5 casos nuevos de portal-access-link), 0 failed"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:ui",
+      "exit": 0,
+      "detail": "22 tests passed (AccessTab ampliado aditivamente con seccion link de acceso; mock factory actualizado)"
+    },
+    {
+      "cmd": "bun run build",
+      "exit": 0,
+      "detail": "root tsc --noEmit -p tsconfig.build.json (packages/customer-assets contracts + client SDK) clean"
+    }
+  ],
+  "counts": {
+    "workerFiles": 7,
+    "workerTests": 82,
+    "newWorkerTests": 8,
+    "cliBunTests": 90,
+    "newCliTests": 5,
+    "uiTests": 22,
+    "fail": 0,
+    "skip": 0
+  },
+  "expiryDesign": "better-auth 1.7.7 NO soporta expiresIn por llamada en signInMagicLink (el body solo acepta email/callbackURL/...; expiresIn existe SOLO a nivel de plugin). Resolucion: cada mint construye una instancia Better Auth desechable (createMintingAuth) que comparte LA MISMA base D1, secreto y tablas (el token vive hasheado y single-use en la tabla estandar verification; no hay tabla paralela) con el expiresIn plugin-level pedido; Better Auth escribe ese vencimiento en el expiresAt de la fila de verificacion y el path normal /api/auth/magic-link/verify aplica el valor de la FILA (probado: backdate de la fila -> INVALID_TOKEN sin sesion). Gramatica aceptada <n>m|h|d (ej. 30m, 48h, 7d); acotacion server-side [30 minutos, 30 dias], default 7d; el CLI valida la misma gramatica/acotacion en local (exit 2 sin red).",
+  "security": {
+    "mintAuthorization": "admin humano (sesion) o clave de agente con scope explícito access:write en el grant server-side; miembros NUNCA (403 en su propio cliente, 404 fuera); agente cross-client 404; grant revocado 404; key inválida 401",
+    "tokenMachinery": "mismo camino Better Auth (storeToken hashed, un solo uso, consumo atómico): segunda lectura del mismo token no crea sesión (probado); el link apunta SIEMPRE al origen aprobado del portal (body.origin disinto -> 400)",
+    "membership": "email desconocido se provisiona role=member (FR-001, server-side); membership por el flujo normal de invitacion (invitacion aceptada en la misma llamada, idempotente); membership revocada no se resucita (409) y un link previo deja de dar acceso a cliente en el siguiente request (probado)",
+    "audit": "AuditEvent registra access-link.mint (actor, clientId, workspaceId, resourceId=membership) y NUNCA el url/token (probado contra las filas); url devuelto UNA vez en la respuesta; mutación deliberadamente sin Idempotency-Key para no persistir el url en el ledger",
+    "noEmail": "el sender inyectado de la instancia de minteo CAPTURA el url y no entrega nada; el mailer/Resend no participa; cero emails"
+  },
+  "filesChanged": [
+    "packages/customer-assets/src/contracts.ts (scope access:write + AccessLinkView + MintAccessLinkRequest)",
+    "packages/customer-assets/src/client.ts (mintAccessLink)",
+    "apps/customer-assets/src/server/auth.ts (createMintingAuth + comentario FR-001)",
+    "apps/customer-assets/src/server/access.ts (RequestDeps.portalOrigin/portalSecret + requireEmail + parseExpiresIn)",
+    "apps/customer-assets/src/server/clients.ts (mintAccessLink)",
+    "apps/customer-assets/src/server/api.ts (POST /api/v1/clients/:clientId/access-links)",
+    "apps/customer-assets/src/routes/api/v1/$.ts (pasa portalOrigin/portalSecret)",
+    "apps/customer-assets/src/features/admin/server.ts (mintClientAccessLink + deps)",
+    "apps/customer-assets/src/features/admin/AccessTab.tsx (seccion Link de acceso con Copiar enlace + scope access:write en opciones)",
+    "apps/customer-assets/src/api/hooks.ts (useMintAccessLink)",
+    "packages/cli/src/specs/portal.ts (portal-access-link + parseExpiresInArg)",
+    "packages/cli/src/portal/testing.ts (ruta fake access-links + access:write en FAKE_SCOPES)",
+    "apps/customer-assets/tests/access-links.test.ts (nuevo, 8 tests)",
+    "apps/customer-assets/tests/portal-fixture.ts (deps con FIXTURE_ORIGIN/FIXTURE_SECRET)",
+    "apps/customer-assets/tests/dashboard.test.tsx (mock factory + mintClientAccessLink)",
+    "packages/cli/src/specs/portal.test.ts (verbos y casos nuevos)",
+    ".plans/customer-assets-portal/contracts.md (notas aditivas 2026-10-05 en §3 y §7)"
+  ],
+  "cliUsage": "bun run vm -- portal-access-link --client <portalClientId> --email cliente@ejemplo.com --expires-in 7d --origin https://portal.ejemplo.com --execute --json  (con CUSTOMER_ASSETS_API_KEY inyectada en el entorno; sin --execute imprime solo el plan con cero red/credencial; con --execute el envelope devuelve {url, email, expiresAt, singleUse:true} para entregar el link)",
+  "notes": "No minted URLs are recorded anywhere in this file (fixture URLs in tests use tokens sintéticos 'fake-minted-token' y vivieron solo en memoria de test). Live deploy + portal:verify:live quedan para el coordinador."
+}
