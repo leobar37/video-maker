@@ -1,0 +1,76 @@
+{
+  "task": "TAILNET INGEST (operator order 2026-10-06)",
+  "anchor": "tailnet-ingest · customer-assets-requests (contracts §10)",
+  "branch": "feat/customer-assets-portal",
+  "date": "2026-10-07",
+  "summary": "Subida de tomas pesadas (~500MB) por la tailnet de Tailscale a un server ingest local de la workstation: SIN login (red cerrada WireGuard), token de capacidad validado SIEMPRE contra la vista mínima del portal (GET /api/v1/a/:token, 200 + open, cache ~60s), chunks reanudables (32MiB/PUT, tope 5GiB), landing atómico gitignored .tmp/portal-ingest/<tokenHash>/ con manifest {tokenHash, binding ← SOLO la vista del portal, sha256, bytes, receivedAt}, y portal-asset-ingest-pull que importa al asset studio EXACTO vía el mismo camino verificado de pullMaterial drenando el landing recién tras la importación verificada. Los bytes jamás tocan Cloudflare; el landing NO son materiales del portal.",
+  "design": {
+    "trustModel": "tailnet = red autenticada (identidad WireGuard del dispositivo) + token del link como capacidad por asset (defensa en profundidad). El server NUNCA acepta un binding fabricado por el uploader: el binding del manifest es la snapshot de la vista del portal (probe: body con binding/assetTitle fabricados → manifest lleva la vista, no el cuerpo). Portal inalcanzable → 503 y CERO bytes almacenados (nunca degrada a aceptar sin validar).",
+    "bindPolicy": "bindea SOLO la IPv4 de `tailscale ip -4`; factory rechaza 0.0.0.0/::/hosts arbitrarios (INVALID_INPUT); loopback existe SOLO para tests del módulo; puerto 8787 default check-free-or-fail (EADDRINUSE → CONFLICT fuerte).",
+    "protocol": "GET /subir/:token → binding + caps + offset staged (reanudación). PUT /subir/:token → chunk con Content-Range `bytes s-e/total` (o forma `bytes=`, o ?offset=; default append); respuesta {received}; offset adelantado 409 con received real; re-envío de cola trunca+agrega; drift de total entre chunks 409. POST /subir/:token/complete {bytes, sha256?} → tamaño 409 si difiere, SHA-256 streamado, exige MP4 (ftyp, 415 conservando staging), landing atómico por rename + manifest por temp+rename. Complete idempotente content-addressed (take-<sha8>): replay con sha256 → 200 idempotent:true, sin duplicados.",
+    "caps": { "chunk": "32MiB (413; también maxRequestBodySize del listener)", "total": "5GiB por toma (413)" },
+    "landing": ".tmp/portal-ingest/<tokenHash>/take-<sha8>.mp4 + .manifest.json; regla .gitignore nueva (.tmp/); NO son materiales del portal: entran a Studio solo vía pull.",
+    "pull": "portal-asset-ingest-pull es LOCAL (sin --origin ni credencial): inspección local del proyecto/asset abierto, escaneo de manifests (uno inválido = INVALID_INPUT fuerte, nunca import a ciegas), re-verificación sha256/bytes/magic por importMaterialBytes (shared path con pullMaterial), input exclusive-create + sidecar determinista (source tailnet-ingest, tailnet:true, tokenHash) + asset.json con lock y rename atómico; toma borrada del landing recién tras import verificada; re-pull con landing vacío = éxito sin duplicados.",
+    "linkIdNote": "la vista v1 es mínima (§3, sin ids) → el join de provenance es tokenHash (UNIQUE en el portal); manifest/provenance incluyen linkId SOLO si una vista futura lo expone (additivo ya soportado en tipos y server).",
+    "cli": [
+      "portal-asset-upload-link --tailnet [--ingest-port 8787]: añade tailnetUrl http://<ip>:<puerto>/subir/<token> (mismo token; IP resuelta al mintear; puerto no-escuchando = advertencia, jamás falla; https url intacta; tailnetUrl jamás persistido en el portal)",
+      "portal-ingest-serve [--port 8787] [--ingest-dir]: primer plano; valida gramática antes de todo; imprime banner (base URL tailnet, NUNCA 0.0.0.0, landing, caps, recordatorio ACL); SIGINT/SIGTERM → stop limpio",
+      "portal-asset-ingest-pull --workspace --project --asset [--ingest-dir .tmp/portal-ingest] [--token <prefijo tokenHash>] --execute --json"
+    ],
+    "sdk": "additive en contracts/client: TailnetIngest* types (Binding/View/ChunkResult/CompleteRequest/Manifest/CompleteResult) + mint option tailnet (host caller-resolved; el SDK puro nunca shellea) + métodos getTailnetIngestView/putTailnetIngestChunk/completeTailnetIngest contra ingestBaseUrl EXPLÍCITO, sin credenciales y redirect:'error'.",
+    "fakePortal": "extendida con settleAssetLink(linkId, 'closed'|'expired') consistente con la semántica real (closed mata el token → 404 neutro; expired sigue resolviendo la vista y toda subida se niega)."
+  },
+  "files": {
+    "new": [
+      "packages/cli/src/portal/ingest-server.ts",
+      "packages/cli/src/portal/ingest.test.ts",
+      "evidence/customer-assets-requests/tailnet-ingest.json"
+    ],
+    "sharedEdits": [
+      "packages/customer-assets/src/contracts.ts (§10 TailnetIngest* types)",
+      "packages/customer-assets/src/client.ts (mint tailnet option + ingest methods + ingestRequest privado sin credenciales)",
+      "packages/cli/src/portal/bridge.ts (importMaterialBytes extraído: único camino de import verificado; pullMaterial lo usa, comportamiento idéntico)",
+      "packages/cli/src/portal/asset-links.ts (+pullLandedTakes)",
+      "packages/cli/src/specs/portal.ts (args tailnet/ingest-port/ingest-dir/token; planAssetLinkMint ampliado; planIngestServe/planIngestPull; specs portal-ingest-serve y portal-asset-ingest-pull; envelope mint con tailnetUrl/probe)",
+      "packages/cli/src/portal/testing.ts (FakePortal.settleAssetLink)",
+      "packages/cli/src/specs/portal.test.ts (registro 16→18 verbos + matrices §10)",
+      ".plans/customer-assets-requests/contracts.md (§10 Ingest tailnet)",
+      ".gitignore (.tmp/)"
+    ]
+  },
+  "checks": {
+    "bun_test_packages_cli": { "cmd": "bun test packages/cli", "exit": 0, "result": "773 pass / 0 fail (46 files, 6353 expect) — incluye ingest.test.ts 14 pass y specs/portal.test.ts 50 pass" },
+    "bun_test_ingest": { "cmd": "bun test packages/cli/src/portal/ingest.test.ts", "exit": 0, "result": "14 pass / 0 fail (111 expect)" },
+    "bun_test_specs": { "cmd": "bun test packages/cli/src/specs/portal.test.ts", "exit": 0, "result": "50 pass / 0 fail (397 expect)" },
+    "bun_test_core_schemas": { "cmd": "bun test packages/core packages/schemas", "exit": 0, "result": "237 pass / 0 fail" },
+    "build": { "cmd": "bun run build (tsc --noEmit -p tsconfig.build.json)", "exit": 0, "result": "OK (CLI + SDK + core/schemas)" },
+    "app_typecheck": { "cmd": "bun run --cwd apps/customer-assets typecheck", "exit": 0, "result": "OK (app untouched)" },
+    "worker_regression": { "cmd": "bun run --cwd apps/customer-assets test:worker", "exit": 0, "result": "137/137 (12 files); ruido preexistente 'Network connection lost' de miniflare, sin fallos" },
+    "liveTailnetSmoke": {
+      "cmd": "createIngestServer({ bindHost: `tailscale ip -4`, port: 8787 }) + ss -tlnp",
+      "result": {
+        "bind": "LISTEN 100.83.90.33:8787 (ss: SOLO la IP tailnet, jamás 0.0.0.0)",
+        "loopbackProbe": "127.0.0.1:8787 → connection refused (el listener no está alcanzable por loopback)",
+        "invalidToken": "GET /subir/tok-invalido → 503 portal_unavailable con cache-control: no-store (portal muerto a propósito en el smoke: nunca acepta bytes sin validar)",
+        "stop": "graceful, puerto liberado"
+      }
+    }
+  },
+  "testCoverage": {
+    "tokens": "invalid → 404 sin byte almacenado; closed → 404; expired → 409; portal caído → 503 sin staging; las llamadas de validación al portal NO llevan api key",
+    "resume": "drop mid-way → re-probe (view.received) → resume → complete: SHA-256 == source; staged reemplazado por landing",
+    "offsets": "Content-Range y ?offset= equivalentes; adelantado 409 {received}; header vs query en desacuerdo 400; coverage exacto del cuerpo",
+    "caps": "constantes 32MiB/5GiB; con caps chicos: chunk 413, total 413, drift de total 409 (antes del cap), luego mismo total OK",
+    "complete": "idempotente por contenido (replay 200 idempotent:true, un solo .mp4 + un .manifest.json); tamaño declarado distinto 409; no-MP4 415 conservando staging",
+    "binding": "binding fabricado en el body IGNORADO: manifest.binding = snapshot de la vista del portal; tokenHash == sha256(token); takeId content-addressed",
+    "bindHost": "factory rechaza 0.0.0.0/::/example.com; server.host == bind explícito; parseSsListenLines sobre captura real + canned; el listener real jamás figura en 0.0.0.0",
+    "banner": "formatIngestServeBanner imprime base URL tailnet + 'NUNCA 0.0.0.0' + recordatorio ACL + referencia a portal-asset-ingest-pull; probeTcpPort distingue listening/no-listening",
+    "pull": "import con SHA match (upload==import), sidecar {source:tailnet-ingest, tailnet:true, tokenHash, materialId:takeId}, asset.json inputs, landing drenado tras import verificado, re-pull idempotente (0 tomas, 0 duplicados), manifest corrupto = INVALID_INPUT fuerte, filtro por prefijo tokenHash, bytes con drift = HASH_MISMATCH (exit 1) y la toma PERMANECE en landing",
+    "specs": "registro 18 verbos; mint --tailnet envelope {tailnetUrl, ingestPort, tailnetProbe} con URL persistido en NINGÚN request; puerto no-escuchando solo advierte (exit 0); serve plan puro bajo --dry-run + --ingest-port inválido usage 2 sin efectos; ingest-pull ejecuta SIN --origin ni credencial y drena el landing"
+  },
+  "scope": {
+    "untouched": "apps/customer-assets sin cambios (regresión verde); sin deploy; sin cambios de Portal Worker; sin trabajo de email; /home/leobar37/code/video-maker intacto",
+    "noTokensInEvidence": true
+  },
+  "blockers": "ninguno"
+}

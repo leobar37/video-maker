@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-05",
+  "phase": "R-001 / P-101 (R-1): proyección PortalProject, pestaña admin Proyectos y material con portal_project_id opcional",
+  "unit": "Task Anchor: «Solicitar videos de un proyecto» (aprobado operador 2026-10-05). Alcance R-1: proyección canónica PortalProject (puntero Studio por cliente, alta solo admin humano, UNIQUE (portalClientId, studioProjectId), 409 divergente), endpoints aditivos GET|POST /api/v1/clients/:clientId/projects y PATCH /api/v1/projects/:projectId (ACL contratos §3 aditivo: admin humano alta/renombre, miembro lista su cliente, agente 403/404 — SIN scopes proyectos nuevos porque contracts.md §3 fija agente=No), pestaña Proyectos en admin (cards + materialCount + placeholder R-2), atribución opcional material.portal_project_id ligada en upload COMPLETE (init valida temprano; sin campo = ruta v1 intacta). Éxito observable: tests de unicidad/autorización/atribución y uploads libres intactos; typecheck/build exit 0.",
+  "environment": {
+    "worktree": "/home/leobar37/.herdr/worktrees/video-maker/customer-assets-portal (feat/customer-assets-portal)",
+    "runtime": "offline only: D1/R2 emulados (Miniflare via @cloudflare/vitest-plugin), migración 0003 aplicada SOLO al fixture desechable del pool worker; verifier/e2e siguen en 0001+0002 por diseño (el código v1 no consulta columnas nuevas)",
+    "bun": "1.4.2",
+    "deploy": "NO realizado — G-cap-live ABIERTO; sin links reales, sin invitados reales, sin migraciones en prod"
+  },
+  "pinnedVersions": "sin dependencias nuevas ni bumps (better-auth 1.7.7, drizzle 0.45.3)",
+  "designNote": "0003 es la migración mínima contractual (tabla portal_project + material.portal_project_id nullable + índice). El mapeo drizzle de material/upload_session NO gana columnas en R-1 a propósito: el verifier offline y el fixture e2e aplican solo 0001+0002 (listas hardcodeadas en scripts/customer-assets-verify.ts y tests/e2e/fixture.ts, read-only para este worker), así que cualquier SELECT drizzle que enumerara la columna nueva rompería esas suites. La atribución se lee/escribe con templates sql explícitos SOLO en rutas de contexto-proyecto (server/projects.ts, server/uploads.ts); la ruta libre v1 no ejecuta ningún statement nuevo. R-2/R-3 pueden mapear la columna en drizzle cuando el coordinator extienda el verifier.",
+  "commands": [
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:worker -- tests/projects.test.ts tests/material-project.test.ts",
+      "exit": 0,
+      "detail": "2 archivos, 17 tests nuevos pasados (projects 10: unicidad idempotente, 409 divergente, 400 validaciones, ACL admin/miembro/agente/anónimo, 404s cross-client, renombre, auditoría project.created sin secretos; material-project 7: atribución en complete, ruta libre con NULL + shape v1 exacto, 404 pre-reserva de cuota, sesión retryable, delivery_output rechaza campo, dedupe inmutable)"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:worker",
+      "exit": 0,
+      "detail": "9 archivos pasados (7 de v1 + 2 nuevos), 99 tests pasados (82 v1 sin edits de assertions + 17 nuevos), 0 failed"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:ui",
+      "exit": 0,
+      "detail": "26 tests pasados (22 v1 sin edits de assertions + 4 nuevos del bloque 'admin projects tab (R-1)': cards con materialCount, create por SDK con refetch, renombre inline, banner de error; mock factory portal ampliada aditivamente con listProjects/createProject/renameProject + projectFixture)"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets typecheck",
+      "exit": 0,
+      "detail": "tsc --noEmit -p tsconfig.json clean (incluye SDK via workspace)"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets build",
+      "exit": 0,
+      "detail": "vite build dist/client + dist/server ok; routeTree.gen.ts regenerado con la ruta /admin/clients/$clientId/projects"
+    },
+    {
+      "cmd": "bun run build",
+      "exit": 0,
+      "detail": "tsc --noEmit -p tsconfig.build.json (raíz) clean"
+    },
+    {
+      "cmd": "bun test packages/customer-assets packages/cli/src/specs/portal.test.ts packages/cli/src/specs/studio.test.ts packages/cli/src/portal packages/cli/src/runtime.test.ts",
+      "exit": 0,
+      "detail": "90 tests pasados, 0 failed — contratos/SDK aditivos no rompen CLI"
+    },
+    {
+      "cmd": "bun run portal:verify",
+      "exit": 0,
+      "detail": "10 etapas ok, 135 aserciones: 00-preflight(3) 01-boot-provision(4) 02-agent-key-adopt(13) 03-invite-login(6) 04-client-upload(10) 05-cli-material-pull(19) 06-cli-delivery-push(24) 07-publish-client-view(17) 08-negatives(30) 09-evidence(9) — prueba cero-regresión v1 completa sobre D1 con 0001+0002"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:e2e",
+      "exit": 1,
+      "detail": "AJENO/PREEXISTENTE (no R-1): único paso que falla es 'login form honesty' (portal.spec.ts:312, espera .error-banner). Causa raíz verificada con repro mínimo: PORTAL_LIVE_SMOKE=\"1\" y PORTAL_MAIL_FROM de wrangler.jsonc (vars Stage B del operador) entran al env del worker e2e porque tests/e2e/vite.config.ts hace spread de workerConfig.vars; con esas vars createMagicLinkSender (src/server/mailer.ts) devuelve el sender que LOGUEA en vez del stub que rechaza → POST /api/auth/sign-in/magic-link responde 200 → la UI muestra éxito. Repro sin tocar código R-1: servidor e2e + POST /api/fixture/reset + POST magic-link → HTTP 200 {\"status\":true}. El paso depende solo de LoginPage/requestMagicLink//api/auth//mailer/wrangler vars — ningún archivo tocado por R-1. Todos los escenarios previos del spec (deliveries, visibilidad, cascade, grid, descargas, negativas) pasan. Reparación candidata (coordinator): limpiar PORTAL_LIVE_SMOKE/PORTAL_MAIL_FROM en los vars del harness e2e o condicionar el paso; fuera del ownership R-1 (tests/e2e + wrangler.jsonc no son míos)"
+    }
+  ],
+  "files": {
+    "new": [
+      "apps/customer-assets/migrations/0003_portal_projects.sql",
+      "apps/customer-assets/src/server/projects.ts",
+      "apps/customer-assets/src/features/admin/ProjectsTab.tsx",
+      "apps/customer-assets/src/routes/_app.admin.clients.$clientId.projects.tsx",
+      "apps/customer-assets/tests/projects.test.ts",
+      "apps/customer-assets/tests/material-project.test.ts"
+    ],
+    "modifiedAdditive": [
+      "apps/customer-assets/src/server/db/schema.ts (tabla portalProject + export; sin columnas nuevas en material/uploadSession — ver designNote)",
+      "packages/customer-assets/src/contracts.ts (PortalProjectView, CreateProjectRequest, RenameProjectRequest, CompleteUploadRequest, InitUploadRequest.portalProjectId?)",
+      "packages/customer-assets/src/client.ts (listProjects/createProject/renameProject)",
+      "apps/customer-assets/src/server/api.ts (rutas projects GET|POST/PATCH, portalProjectId en validateInitUploadBody y complete)",
+      "apps/customer-assets/src/server/uploads.ts (validación temprana en init, atribución en completeMaterial solo fila fresca; ruta libre sin statements nuevos)",
+      "apps/customer-assets/src/routes/_app.admin.clients.$clientId.tsx (entrada 'Proyectos' en TABS — 1 línea para exponer la pestaña)",
+      "apps/customer-assets/tests/portal-fixture.ts (wipe aditivo de portalProject + import)",
+      "apps/customer-assets/tests/dashboard.test.tsx (mock factory + describe R-1)",
+      "apps/customer-assets/src/routeTree.gen.ts (regenerado por build)"
+    ]
+  },
+  "contractsPreserved": "v1 intacto: uploads libres, auth, access links, entregas, posts/grid verdes sin editar assertions (99 worker, 26 ui, 90 CLI, portal:verify 135). Studio canónico sin escrituras; D1 solo proyección; migración forward-only aditiva; atribución NULL = flujo v1 idéntico (shape de respuesta byte-idéntico testeado). Sin scopes nuevos de proyectos (contracts §3 aditivo manda). R-2 (tokens) y R-3 (CLI pull) NO iniciados.",
+  "secrets": "ningún token, cookie, key o URL de login en este archivo; la key del integrador vive solo en el subprocess del verifier"
+}

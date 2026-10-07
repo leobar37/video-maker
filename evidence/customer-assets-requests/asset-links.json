@@ -1,0 +1,54 @@
+{
+  "task": "ASSET-UPLOAD-LINK (operator order 2026-10-06)",
+  "anchor": "asset-upload-link · customer-assets-requests",
+  "branch": "feat/customer-assets-portal",
+  "date": "2026-10-06",
+  "summary": "El agente fabrica por CLI un link de subida atado a UN asset exacto de Studio; el operador lo entrega por su canal (0 emails); el invitado abre /asset-upload/<token> sin login y la toma sube atribuida a ese asset (material.asset_target); portal-asset-pull importa el conjunto por asset al asset abierto exacto con provenance (origin, materialId, linkId).",
+  "design": {
+    "tokenBinding": {
+      "entity": "asset_upload_link (0005_asset_upload_links.sql; UNA tabla nueva + material.asset_target nullable + índice; aditivo puro, ninguna fila existente alterada)",
+      "storage": "solo SHA-256(token) UNIQUE; el token crudo vive únicamente en el URL minteado /asset-upload/<token>, mostrado una vez, jamás logueado/auditado/persistido",
+      "binding": "link → (portalClient, portalProject opcional, studioProjectId, studioAssetId); el guest session se liga a user:guest:<tokenHash> (misma regla v1 de binding por principal) y material.asset_target se toma SIEMPRE del link, nunca de input — el token vale SOLO para su asset y no existe forma de API que redirija la subida",
+      "state": "open → used | closed | expired, lazy al primer toque (UPDATE guardado + 1 audit); used terminal (capacidad de UNA toma); re-mint cierra priors open (rotación, audit asset_link.revoked); closed = revocada → 404 neutro en toda la familia; used/expired resuelven para mostrar estado (subidas 409)"
+    },
+    "mintAcl": "admin humano O agente con scope NUEVO assets:write (AGENT_SCOPES aditivo; grants previos jamás lo tienen → 403); members 403/404; resolución de puntero por studio_project_id (0 → 404, ambigüedad → 409 con --client desambiguando); mint NO idempotente (como access/request links)",
+    "quota": "sin presupuesto propio (cuota de request N/A por orden del operador): CAS client_quota único (init reserva → 429; 413 por tipo v1; fallos liberan; complete confirma); ensureQuotaRow antes de reservar",
+    "pull": "GET /api/v1/asset-upload-links/materials?asset= → items con linkId resuelto de uploaded_by=user:guest:<tokenHash> vía token_hash UNIQUE (sin columnas nuevas); pullMaterial existente (temporal confinado, SHA+magic, exclusive-create, asset.json con lock, never overwrite/never invent destination); idempotente (origin, materialId)",
+    "endpoints": [
+      "POST /api/v1/asset-upload-links (mint, admin | assets:write)",
+      "GET /api/v1/asset-upload-links[?client=&asset=] (admin)",
+      "GET /api/v1/asset-upload-links/:id (admin, sin token)",
+      "POST /api/v1/asset-upload-links/:id/close (admin, 409 si terminó)",
+      "GET /api/v1/asset-upload-links/materials?asset= (admin | materials:read)",
+      "GET|POST /api/v1/a/:token[/uploads|/:sid/content|/:sid/complete] (guest family, antes del principal, no-store, upload-only; token-como-clave en me/catalog/deliveries/posts = 401)"
+    ]
+  },
+  "migrations": {
+    "new": "apps/customer-assets/migrations/0005_asset_upload_links.sql",
+    "additiveProof": "CREATE TABLE IF NOT EXISTS asset_upload_link + ALTER TABLE material ADD COLUMN asset_target (nullable) + 3 índices nuevos; sin UPDATE/BACKFILL de filas existentes; los caminos v1/R-1/R-2 no tocan la columna nueva (patrón R-1/R-2)",
+    "fixtureDiff": [
+      "apps/customer-assets/tests/e2e/fixture.ts: migrationStatements 0001..0004 → 0001..0005 (una entrada)",
+      "scripts/customer-assets-verify.ts: misma lista de migraciones 0001..0004 → 0001..0005 (una entrada; extensión de lista autorizada, walk SIN extender — regresión pura)",
+      "apps/customer-assets/vitest.config.ts: readD1Migrations('./migrations') ya toma 0005 automáticamente (sin diff)"
+    ]
+  },
+  "checks": {
+    "test_worker": "137/137 (120 base + 17 nuevas de asset-upload-links.test.ts)",
+    "test_ui": "27/27",
+    "test_e2e": "OK full (incluye escenario aditivo mobile guest asset link: mint → upload sin login → used state → import set admin; evidencia en evidence/customer-assets-requests/asset-links-e2e/)",
+    "cli_sdk_bun": "752 pass / 0 fail (packages/customer-assets + packages/cli; incluye 7 bridge + 6 specs nuevas y registro 14 → 16 verbos)",
+    "typecheck": "apps/customer-assets OK, packages/cli OK",
+    "build": "bun run build (raíz, tsc) OK; vite build app OK (routeTree regenerado con /asset-upload/$token)",
+    "portal_verify": "ver reporte (regresión pura; walk NO extendido — opcional no ejercido para mantener el alcance)"
+  },
+  "audits": [
+    "asset_link.minted|revoked|closed|expired|used + asset_link.upload.completed — sin URL ni token crudo (probado en suite)"
+  ],
+  "sharedEdits": "NINGUNA en archivos del worker UI-DENSITY (features/components/styles intactos); route /asset-upload/$token importa Dropzone + primitives de solo-lectura; skeleton duplicado a propósito (nota de merge para coordinador en el header del route); bun.lock/package.json del app: agregados por DensityWorker (@tanstack/react-table), no tocados por ASSET-LINK",
+  "notes": [
+    "Guest page: route nueva única (routes/asset-upload.$token.tsx) con motor de subida propio contra /api/v1/a/ — duplicación mínima documentada para merge a GuestUploadSurface",
+    "Dedupe v1: bytes idénticos convergen en la fila existente y conservan su contexto original (la atribución jamás se reescribe; puede quedar fuera del conjunto por asset — contracts §9)",
+    "fake portal (testing.ts): seedAssetLink + rutas asset-link + familia /a/ con rotación/cuota simplificadas consistentes; guard invitado también para /a/"
+  ],
+  "stopRespected": "sin deploy, sin nube, sin provider de email, sin nada live; evidencia SIN URLs minteadas"
+}

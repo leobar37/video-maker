@@ -1,0 +1,61 @@
+{
+  "phase": "R-2 · Upload requests con enlace de invitado, móvil y cuotas (T-REQ-002 / P-102, goal G-002)",
+  "date": "2026-10-05",
+  "gate": "Offline only: G-cap-implement/G-cap-local (aprobación vigente 2026-10-04). G-cap-live ABIERTO: sin deploy, sin links reales, sin invitado real, 0 emails.",
+  "taskAnchor": "Solicitar videos de un proyecto (operador, 2026-10-05): tokens de capacidad guest-direct, límites/cuota concurrentes con doble CAS, auto-close y e2e móvil del enlace; typecheck/build exit 0.",
+  "verification": [
+    { "cmd": "bun run --cwd apps/customer-assets test:worker -- tests/request-tokens.test.ts tests/request-quota.test.ts", "exit": 0, "counts": "21 passed (13 tokens + 8 quota)" },
+    { "cmd": "bun run --cwd apps/customer-assets test:worker", "exit": 0, "counts": "120 passed / 11 files (99 v1+R-1 sin regresión + 21 nuevos R-2)" },
+    { "cmd": "bun run --cwd apps/customer-assets test:ui", "exit": 0, "counts": "27 passed (26 previos + 1 nueva: request cards)" },
+    { "cmd": "bun run --cwd apps/customer-assets test:e2e", "exit": 0, "counts": "2 escenarios OK; 12 screenshots (8 previos + 4 guest); v1 walkthrough intacto" },
+    { "cmd": "bun run --cwd apps/customer-assets typecheck", "exit": 0 },
+    { "cmd": "bun run --cwd apps/customer-assets build", "exit": 0 },
+    { "cmd": "bun run build (raíz, tsconfig.build.json)", "exit": 0 },
+    { "cmd": "bun test packages/customer-assets packages/cli/src/specs/portal.test.ts packages/cli/src/specs/studio.test.ts packages/cli/src/portal packages/cli/src/runtime.test.ts", "exit": 0, "counts": "90 pass / 0 fail (CLI 90/90 intacto)" },
+    { "cmd": "bun run portal:verify", "exit": 0, "counts": "10 etapas, 135 aserciones (walkthrough v1 intacto; migraciones 0001..0004 en el fixture autorizado)" }
+  ],
+  "counts": {
+    "workerTests": "120 passed (99 previos + 21 nuevos)",
+    "uiTests": "27 passed (26 previos + 1 nueva)",
+    "cliTests": "90 pass",
+    "portalVerify": "10 etapas / 135 aserciones",
+    "newSuites": "tests/request-tokens.test.ts (13) + tests/request-quota.test.ts (8)",
+    "e2eGuestScreenshots": ["mobile-guest-request-open.png", "mobile-guest-request-progress.png", "mobile-guest-request-fulfilled.png", "mobile-guest-request-closed.png"]
+  },
+  "design": {
+    "token": {
+      "storage": "upload_request_token guarda SOLO token_hash = SHA-256 hex (UNIQUE) del token crudo; el token crudo (256 bits CSPRNG, base64url de 43 chars) existe únicamente en el URL minteado, se muestra una vez al admin y jamás se guarda, loguea ni audita (audit actor/ids only). Test: ninguna columna contiene el token crudo y el hash coincide con SHA-256.",
+      "guestPrincipal": "Resuelto por HTTP en cada request: hash -> fila token (revocada/expirada => 404) -> fila request. NO es sesión de Better Auth, no toca tablas auth, no setea cookie (assert en test y e2e). Binding de upload_session: principal_id = 'user:guest:<hash>' derivado SOLO del hash.",
+      "revocation": "Un token ACTIVO por request (default del operador): re-mint revoca el anterior (UPDATE ... WHERE revoked_ms IS NULL) con auditoría request_token.revoked; el token viejo muere en el siguiente touch. Token vencido (30m..30d, gramática ACCESS_LINK_*) => 404.",
+      "isolation": "El token autentica CERO rutas v1: /me, clients, materials, assets, posts => 401 sin credenciales; token crudo como x-api-key => 401 (Better Auth no lo verifica); rutas admin de requests sin sesión => 401. Scopes nuevos requests:read/requests:write son server-side en agent_grant: grants viejos => 403, member => 403 (su cliente) / 404 (ajeno)."
+    },
+    "quota": {
+      "dualReservation": "guest init reserva en UN batch D1 atómico: (a) CAS client_quota existente (reserved += delta <= limit) y (b) CAS del request (state='open', expires_ms > now, used_bytes + delta <= max_bytes, used_files + 1 <= max_files). Los resultados se leen por statement: changes=1 = arm aplicada.",
+      "compensatoryRelease": "Si una arm pierde, se libera EXACTAMENTE la(s) arm(s) que aplicaron (patrón v1 MAX(0, ...)): quota-perdió+request-aplicó libera request; quota-aplicó+request-perdió libera quota; fallo del INSERT de sesión libera ambas. 413 = límite por tipo; 429 = presupuesto del request o cuota del cliente (pre-check informativo diferencia el mensaje).",
+      "completeCommit": "complete re-verifica el staging con el MISMO pipeline v1 (stageUpload/finalizeUpload, SHA-256, firmas) y comita en un batch: material (con portal_project_id del request + upload_request_id) + sesión ready + commitQuotaStatement CAS. Fallo 415 (declaración vs bytes) libera ambos presupuestos en el mismo batch. Reintentos: ready => replay; final_conflict => orphan recovery por clave content-addressed (sin duplicar).",
+      "autoClose": "Al llenar (used_files >= max_files OR used_bytes >= max_bytes) el complete hace flip 'open'->'fulfilled' con guard de estado (una sola vez) + auditoría request.fulfilled. Expiry LAZY en cada uso/listado: primer touch pasado expires_ms materializa 'expired' con CAS guardado => exactamente 1 auditoría request.expired aunque se toque N veces. close de admin: open|fulfilled -> closed con close_reason; cerrado/vencido => 409; upload sobre cerrado/vencido/lleno => 409.",
+      "capAtCreation": "maxFiles (1..500, default 10) y maxBytes (default 2GiB) se validan al crear contra el límite de cuota del cliente (un request nunca promete más que la cuota); los uploads libres de v1 compiten por el mismo CAS sin cambios."
+    },
+    "guestPage": "Ruta pública /request/$token FUERA del layout _app (sin RequireAuth, sin cookie, sin prompt de login en ningún estado): título/instrucciones, restante (archivos/bytes), expiry, estados abierto/progreso/lleno/cerrado/vencido; subidas con progreso XHR real por /api/v1/r/:token (mismo protocolo init/put/complete, HEIC rechazado, límites visibles). Cache: cabecera no-store en el documento (route headers) y en TODA respuesta guest; fallo de token => página neutra sin enumeración."
+  },
+  "sharedEdits": {
+    "authorized": [
+      "scripts/customer-assets-verify.ts — migrations list ['0001_auth.sql','0002_portal.sql'] -> + '0003_portal_projects.sql', '0004_upload_requests.sql' (una línea; walkthrough v1 intacto, 10 etapas/135 aserciones verdes)",
+      "apps/customer-assets/tests/e2e/fixture.ts — migrations list idéntica (una línea)"
+    ],
+    "additiveHelpers": [
+      "src/server/uploads.ts — solo 'export' en helpers existentes de cuota (ensureQuotaRow, reserveQuota, releaseQuota, commitQuotaStatement, releaseQuotaStatement): cero cambios de comportamiento v1",
+      "tests/portal-fixture.ts — wipe FK-safe de upload_request/upload_request_token + helpers uploadViaToken/tokenFromLinkUrl/isSessionView",
+      "tests/dashboard.test.tsx — mocks SDK de requests + la aserción del placeholder R-2 ('llegan con R-2') reemplazada por aserciones de las cards reales (el placeholder lo sustituye el feature autorizado de ProjectsTab)",
+      "src/server/db/schema.ts — material gana portal_project_id/upload_request_id nullable en el mapping drizzle: seguro porque worker tests aplican todo migrations/ y verifier/e2e ahora aplican 0003+0004 (nota del comentario actualizada); R-1 mantiene sus sql templates sin cambios",
+      "tests/e2e/run.ts — invoca runGuestRequestSpec y agrega sus screenshots/notas a la evidencia existente (aditivo)"
+    ]
+  },
+  "notes": [
+    "Sin deploy, sin D1 remoto, sin emails (el flujo de requests NO envía emails: el URL lo entrega el operador por su canal), sin cron/colas.",
+    "Ningún token ni URL minteado aparece en esta evidencia, en logs, en screenshots (page-only, sin address bar) ni en fixtures hardcodeados: todos los tokens de tests son runtime-generated.",
+    "portal:verify aplicó 0003+0004 en su fixture desechable por la edición autorizada; sin backfill y sin migración destructiva (tablas nuevas + columnas nullable).",
+    "R-3 (CLI portal-request-*) NO iniciado: los endpoints HTTP/SDK quedan listos para el dispatcher CLI."
+  ],
+  "stop": "STOP after R-2: sin CLI pull (R-3), sin live (G-cap-live ABIERTO)."
+}
