@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-05",
+  "phase": "R-001 / P-103 (R-3): CLI portal-request-* (create/list/close/link/pull), import al proyecto Studio exacto por el bridge, cierre/expiración/rotación y verifier extendido",
+  "unit": "Task Anchor: «Solicitar videos de un proyecto» (aprobado operador 2026-10-05). Alcance R-3: specs CLI portal-request-* con plan sin --execute (cero red/fs/credencial) y --execute feliz; portal-request-pull importa TODOS los materiales ready de UN pedido al proyecto Studio local explícito reutilizando el bridge portal-material-pull (temporal confinado, SHA-256+magic, sidecar de provenance (origin, materialId, requestId), idempotente por (origin, materialId), nunca sobrescribe un input distinto, sin inventar destino); rotación de token (re-mint mata el anterior), cierre (409 en cerrado/vencido) y negativas de scopes/roles; portal:verify extendido a 11 etapas con el recorrido completo y negativas.",
+  "environment": {
+    "worktree": "/home/leobar37/.herdr/worktrees/video-maker/customer-assets-portal (customer-assets-requests)",
+    "runtime": "offline only: fake portal in-process (127.0.0.1:0) para suites CLI; verifier sobre vite dev efímero loopback con D1/R2 emulados y migraciones 0001..0004",
+    "bun": "1.4.2",
+    "deploy": "NO realizado — G-cap-live ABIERTO: sin links reales, sin invitado real, 0 emails; ningún URL minteado se guarda en esta evidencia"
+  },
+  "pinnedVersions": "sin dependencias nuevas ni bumps",
+  "design": {
+    "cliGrammar": "contracts.md §6 fija --project <studioProjectId> para create/list, pero §3 (verificado en apps/customer-assets/src/server/projects.ts:123) PROHÍBE a los agentes listar proyectos (403 'Projects are restricted to portal admins and client members'), así que esa resolución es imposible con agent key. Se implementó la gramática de la delegación: create/list toman --project <portalProjectId> (el CLI no enumera pointers; sin --project el list es usage error exit 2 con mensaje claro) y --client queda como cross-check (mismatch post-creación → INVALID_INPUT). pull toma --project <studioProjectId> LOCAL (debe existir; si falta → NOT_FOUND sin crear destino) y la relación pedido↔proyecto la valida el guard existente de pullMaterial (clientIds del proyecto vs studioClientId del cliente portal).",
+    "pull": "pullRequestMaterials (packages/cli/src/portal/requests.ts) reutiliza pullMaterial por material con requestId: mismo temporal confinado <workspace>/.vm/tmp, verificación sha256/bytes/firma, exclusive-create del input, sidecar determinista que ahora incluye requestId SOLO en pulls de pedido (el sidecar de portal-material-pull queda byte-idéntico a v1), asset.json con lock/validación/rename atómico. Idempotente por (origin, materialId): re-pull → addedInputs [] + reusedBytes true.",
+    "rotationAndClose": "portal-request-link --execute mintea/rota (el token anterior muere: 404 uniforme); portal-request-close cierra open|fulfilled y responde 409 CONFLICT en cerrado/vencido; expiry LAZY materializada al primer uso (verifier retrocede expires_ms vía fixture SQL directa sobre la SQLite de miniflare — /api/fixture/reset es destructivo: DROP de todas las tablas).",
+    "fakePortal": "testing.ts extendido con la familia completa de rutas de requests (create/list/get/materials/close/link) + familia guest /api/v1/r/:token (view/init/put/complete) con doble CAS simplificado y consistente (413 por archivo, 429 presupuesto/cuota, 409 estados), auto-fulfilled al llenar, expiración lazy, rotación con revocación, y option scopes para simular grants viejos (FORBIDDEN). Las rutas guest NO exigen x-api-key (el token del path es la capacidad).",
+    "agentKey": "El verifier emite la key de requests por el flujo admin UI REAL (se muestra una sola vez) y amplía el grant con requests:read/requests:write vía UPDATE directo a la D1 emulada (la pestaña de acceso v1 no renderiza los checkboxes de los scopes R-2; patrón 'grants previos jamás los tienen')."
+  },
+  "verification": [
+    { "cmd": "bun test packages/customer-assets packages/cli/src/specs/portal.test.ts packages/cli/src/specs/studio.test.ts packages/cli/src/portal packages/cli/src/runtime.test.ts", "exit": 0, "counts": "112 pass / 0 fail (90 previos + 10 nuevos en portal/requests.test.ts + 12 nuevos en specs/portal.test.ts)" },
+    { "cmd": "bun run portal:verify", "exit": 0, "counts": "11 etapas / 198 aserciones (v1 intacta: 00..08; nueva 08.5-requests: 62 aserciones; 09-evidence: 10)" },
+    { "cmd": "PORTAL_VERIFY_SABOTAGE=1 bun run portal:verify", "exit": 1, "counts": "SONDA: falla EXACTAMENTE 07-publish-client-view (16/17) con la aserción saboteada; 08.5-requests sigue verde (62) — la sonda solo muerde lo saboteado; evidencia en offline-sabotage.json" },
+    { "cmd": "bun run build (raíz, tsconfig.build.json)", "exit": 0 },
+    { "cmd": "bun run --cwd apps/customer-assets test:worker", "exit": 0, "counts": "120 passed (sin cambios de app en R-3)" },
+    { "cmd": "bun run --cwd apps/customer-assets test:ui", "exit": 0, "counts": "27 passed" },
+    { "cmd": "bun run --cwd apps/customer-assets test:e2e", "exit": 0, "counts": "E2E OK (walkthrough v1 + guest intactos)" },
+    { "cmd": "bun run --cwd apps/customer-assets typecheck", "exit": 0 },
+    { "cmd": "bun run --cwd apps/customer-assets build", "exit": 0 }
+  ],
+  "counts": {
+    "cliTests": "112 pass / 0 fail",
+    "newBridgeTests": "packages/cli/src/portal/requests.test.ts: 10 tests (create+mint, pointer desconocido 404, --client mismatch, guest x2 + auto-fulfilled + vista mínima sin ids, pull con SHA+requestId, re-pull idempotente, proyecto ausente NOT_FOUND sin crear destino, proyecto sin relación INVALID_INPUT, rotación mata token anterior, close/re-close/guest-init-409 + list closed)",
+    "newSpecTests": "packages/cli/src/specs/portal.test.ts: 12 tests nuevos (plans puros de close/link/pull, --dry-run de list sin red, gramática local max-files/max-bytes/state/expires exit 2 sin red, create feliz {requestId,url,expiresAt,limits}, pointer desconocido + --client mismatch, FORBIDDEN sin requests:write, pull feliz con provenance requestId + re-pull idempotente, pull de pedido vacío y desconocido, list por estado + list sin --project usage error, rotación via CLI, close/re-close/unknown + guest 409)",
+    "portalVerify": "11 etapas / 198 aserciones (08.5-requests: 62; umbral pedido >= 25)",
+    "sabotageProbe": "exit 1 con SOLO 07 en fallo (aserción de digest equivocado); offline-sabotage.json escrito",
+    "verifierCliInvocations": 41
+  },
+  "filesChanged": [
+    "packages/cli/src/specs/portal.ts (5 specs nuevos: portal-request-create/list/close/link/pull; args y parsers max-files/max-bytes/state; plans puros)",
+    "packages/cli/src/portal/requests.ts (NUEVO: createPortalRequest/listPortalRequests/closePortalRequest/mintPortalRequestLink/pullRequestMaterials)",
+    "packages/cli/src/portal/bridge.ts (requestId opcional en PullMaterialInput + provenance con requestId; v1 intacto)",
+    "packages/cli/src/portal/testing.ts (fake: rutas de requests + familia guest con doble CAS simplificado; option scopes; seedProject/seedRequest/portalRequests)",
+    "packages/cli/src/specs/portal.test.ts (matriz de ejecución + plans + gramática)",
+    "packages/cli/src/portal/requests.test.ts (NUEVO)",
+    "scripts/customer-assets-verify.ts (etapa 08.5-requests + fixtureSql no destructivo + cadena requests en 09-evidence + secrets guard + counts)"
+  ],
+  "sharedEdits": "NINGUNA en packages/customer-assets/src/{contracts,client}.ts: el SDK de R-2 ya exponía todas las rutas necesarias (createRequest/mintRequestLink/closeRequest/listRequests/getRequest/listRequestMaterials) — no hicieron falta edits aditivos en archivos shared del coordinator. La única infraestructura de test agregada vive en scripts/ y packages/cli (ownership propio).",
+  "secrets": "CERO tokens de capacidad, URLs minteadas, cookies ni keys en este archivo (guard automático en writeEvidence + aserciones in-stage: el token no aparece en el registro de comandos ni en sidecars).",
+  "notes": [
+    "Conflicto contractual resuelto y reportado: contracts.md §6 (create/list con --project <studioProjectId>) es inexigible para agentes porque §3 prohíbe listar proyectos (verificado en el server R-1); se implementó la gramática de la delegación (--project <portalProjectId> para create/list; --project <studioProjectId> local para pull con guard de relación cliente-proyecto). El coordinator puede querer alinear contracts.md §6 en la próxima revisión.",
+    "El mismatch de --client en create es necesariamente post-creación (el server crea y responde el client real); el server de todas formas bloquea creates cross-client por grant del agente (403/404).",
+    "STOP tras R-3: sin deploy, sin live, sin features nuevas (G-cap-live sigue ABIERTO)."
+  ]
+}
