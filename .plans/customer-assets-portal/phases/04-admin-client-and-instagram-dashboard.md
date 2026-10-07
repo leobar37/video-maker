@@ -1,7 +1,7 @@
 ---
 id: "P-004"
 title: "Dashboard admin/cliente y simulación de Instagram"
-status: "pending"
+status: "accepted"
 phase_type: "implementation"
 description: "La UI actual es vanilla/read-only para tailnet. Esta unidad crea la app React Start privada sin exponer el servidor Bun ni prometer integración real de Instagram."
 end_state: "Tests de UI y browser en desktop/móvil pasan carga, filtros, draft oculto, posts/carrusel y grid persistida; typecheck/build exit 0."

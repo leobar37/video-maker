@@ -1,7 +1,7 @@
 ---
 id: "P-005"
 title: "Flujo completo offline y preparación de operación"
-status: "pending"
+status: "accepted"
 phase_type: "validation"
 description: "Antes de autorizar nube, reproducir los mismos caminos de usuario y CLI con D1/R2 emulados y mail fake, y demostrar que el estándar Studio permanece compatible."
 end_state: "Recorrido cliente→CLI→Studio→entrega→grid y negativas de aislamiento pasan offline sin IA/publicación; compatibilidad/build exit 0 y checklist live contiene recursos/rollback."

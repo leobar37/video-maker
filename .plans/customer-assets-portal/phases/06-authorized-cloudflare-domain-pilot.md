@@ -1,7 +1,7 @@
 ---
 id: "P-006"
 title: "Piloto HTTPS autorizado en customers-assets.theelena.me"
-status: "pending"
+status: "accepted"
 phase_type: "validation"
 description: "La funcionalidad offline no prueba DNS, bindings, cookies HTTPS ni email entregado. Esta fase es el único lugar para aprovisionar/migrar/subir/enviar/deploy, tras gate humano con inventario y límites explícitos."
 end_state: "Smoke real HTTPS en dominio aprobado pasa con email/login, R2/D1, CLI, entrega y grid; live verifier exit 0 con evidencia sin secretos."

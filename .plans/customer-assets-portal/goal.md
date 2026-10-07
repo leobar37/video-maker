@@ -1,7 +1,7 @@
 ---
 id: "G-001"
 title: "Portal privado de materiales y entregas conectado a Studio y CLI"
-status: "pending"
+status: "completed"
 end_state: "Los seis goal units pasan verification; cliente invitado sube material, CLI importa a Studio y entrega output sellado que admin habilita y cliente ve en grid; smoke HTTPS live en dominio aprobado pasa con aislamiento y revocación."
 verification: "bun run portal:verify && bun run studio:verify && bun run build && bun --cwd apps/customer-assets run build && bun run portal:verify:live; todos exit 0; live solo tras G-cap-live"
 deliverables: ["Portal Start admin/cliente", "Auth Better Auth con D1 y grants de CLI", "R2 privado con uploads verificables", "Bridge Studio y posts/grid", "Evidencia offline/live y operación"]

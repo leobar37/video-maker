@@ -44,6 +44,8 @@ Admin se provisiona de manera controlada, no por registro libre. Tener sesión n
 
 Plugin API key de Better Auth, validación manual servidor, sin `enableSessionForAPIKeys`. Las rutas genéricas de create/update/delete keys no permitirán a miembros o agentes autoemitirse permisos ni ampliar grants; probarlas directamente. Key por integración; no cookies humanas, no admin global por defecto. Secrets solo inyección env o perfil protegido ignorado 0600, no args de proceso ni metadata de Studio.
 
+Additivo registrado 2026-10-05 (post-G-001, ordenado por el operador, aprobado por integration owner): `POST /api/v1/clients/:clientId/access-links` mintea un link de login single-use para un miembro de ese cliente. Autorización: admin humano O clave de agente con scope explícito `access:write` en su grant server-side (scope nuevo del set v1; grants previos nunca lo tienen); los miembros nunca mintean (403 en su propio cliente, 404 fuera). El link reutiliza la maquinaria propia de Better Auth (mismo token hasheado y de un uso en la tabla `verification`; no hay tabla paralela): la expiración configurable al mintear (`<n>m|h|d`, mínimo 30 minutos, máximo 30 días, default 7d; better-auth 1.7.7 no soporta expiresIn por llamada, se materializa por instancia de minteo en el `expiresAt` de la fila, que es lo que verifica el path normal). Un email desconocido se provisiona como usuario `role=member` (provisioning server-side FR-001) y la membership se crea idempotentemente por el flujo normal de invitación; una membership revocada no se resucita (409). El URL se captura server-side y se devuelve UNA vez en la respuesta: nunca viaja por email del portal, ni queda en auditoría, logs ni idempotencia (la mutación deliberadamente no usa Idempotency-Key).
+
 ## 4. Uploads y archivos
 V1: JPEG/PNG/WebP hasta 20 MiB y MP4 hasta 50 MiB por archivo; cuota default 1 GiB/cliente configurable, presupuesto reservado de forma concurrente e idempotente. HEIC se rechaza con explicación, sin fingir conversión. Logos SVG existentes solo descarga segura; para preview se entrega raster PNG/WebP. No HTML ni SVG activos inline.
 
@@ -77,7 +79,7 @@ JSON tipado por schemas puros del SDK; páginas `{items,nextCursor}`, error `{er
 - `GET|HEAD /api/v1/materials/:id/content`.
 - `POST /api/v1/clients/:clientId/deliveries`, carga de outputs internos con mismo protocolo de staging, `POST /api/v1/deliveries/:id/complete`; ready requiere todos los bytes verificados.
 - `GET /api/v1/clients/:clientId/assets`, `GET|HEAD /api/v1/deliveries/:id/outputs/:name` (autorizar selected output, no todo el asset).
-- `GET|POST /api/v1/clients/:clientId/posts`, `PATCH /api/v1/posts/:id`, `PATCH /api/v1/clients/:clientId/grid` con version/If-Match. Escritura solo admin humano.
+- `GET|POST /api/v1/clients/:clientId/posts`, `PATCH /api/v1/posts/:id`, `PATCH /api/v1/clients/:clientId/grid` con version/If-Match. Escritura solo admin humano. Additivo registrado 2026-10-04 (P-004, aprobado por integration owner): `GET /api/v1/clients/:clientId/grid` devuelve GridState con versión vigente para iniciar PATCH sin 409 irrecuperable; solo admin humano, mismos filtros de acceso que toda lectura.
 - `PATCH /api/v1/client-assets/:id/visibility`; hide hace que posts que lo usan dejen de ser visibles (no URLs indirectas).
 - Admin server functions/rutas para invites/memberships/keys; no endpoints genéricos sin política server-side. Redirect a UI no sustituye checks API.
 
@@ -93,6 +95,7 @@ Prefijo interno flat `portal-*` para no tocar normalización de grupos existente
 - `portal-material-show <materialId> --origin <url> --json`.
 - `portal-material-pull <materialId> --workspace <dir> --project <id> --asset <id> --origin <url> --execute --json`.
 - `portal-delivery-push --workspace <dir> --client <portalClientId> --project <id> --asset <id> --revision <id> --outputs <comma-names> --origin <url> --execute --json`.
+- `portal-access-link --client <portalClientId> --email <email> --expires-in <7d|48h|30m> --origin <https-origin> --execute --json`: mintea el link single-use del miembro (§3, additivo 2026-10-05 aprobado por el operador); mutación con plan puro sin `--execute` (cero red, cero credencial); el `--json` devuelve `{url, email, expiresAt, singleUse}` y el operador entrega el URL por su canal (WhatsApp, etc.); `--expires-in` valida localmente la misma gramática/acotación que el servidor.
 - `portal-asset-list --client <portalClientId> --origin <url> --json`.
 
 Credencial `CUSTOMER_ASSETS_API_KEY` inyectada, nunca `--token`; origen HTTPS explícito, no defaults a otro cliente. El SDK valida redirects/origins antes de enviar credentials; llamadas fuera del origen admitido y redirects externos no reciben header. `--dry-run` no verifica credenciales contra red ni descarga; enumera effects con datos locales.

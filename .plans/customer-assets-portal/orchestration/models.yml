@@ -1,0 +1,13 @@
+# customer-assets-portal: asignación explícita indicada por el usuario.
+# IDs y thinking high verificados con omp models zai --json.
+# default/plan/advisor = orquestador; todos los workers = Flash por contrato.
+setupVersion: 2
+modelRoles:
+  default: zai/glm-5.3:high
+  plan: zai/glm-5.3:high
+  advisor: zai/glm-5.3:high
+  slow: zai/glm-5.3-flash:high
+  smol: zai/glm-5.3-flash:high
+  tiny: zai/glm-5.3-flash:high
+  commit: zai/glm-5.3-flash:high
+  vision: zai/glm-5.3-flash:high

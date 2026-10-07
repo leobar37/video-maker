@@ -1,7 +1,7 @@
 ---
 id: "P-002"
 title: "Backend privado de clientes, materiales y entregas"
-status: "pending"
+status: "accepted"
 phase_type: "implementation"
 description: "Studio no es multi-tenant por usuario. Worker no puede montar el workspace local. Esta unidad guarda acceso y proyecciones de entrega, conservando referencias de Studio y aislando los archivos privados."
 end_state: "Endpoints y archivos privados pasan tests de tenant/scope, uploads/idempotencia, entrega interna y posts; typecheck/build exit 0."
