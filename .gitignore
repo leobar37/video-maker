@@ -15,6 +15,10 @@ id_rsa*
 coverage/
 .tmp-*
 
+# Tailnet ingest landing (§10 customer-assets-requests): staged + landed takes
+# NEVER enter git (large media); they are not portal materials either.
+.tmp/
+
 # Local research artifacts and downloaded reference media
 docs/artifacts/
 
