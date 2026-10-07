@@ -1,0 +1,359 @@
+{
+  "date": "2026-10-07T06:33:50.979Z",
+  "phase": "P-005 flujo completo offline (v1) + R-3 recorrido upload requests (customer-assets-requests)",
+  "gate": "G-cap-local (D1/R2 emulados, servidor efímero loopback, mail fake). G-cap-live NO ejecutado: sin cloud, deploy, emails reales ni studio:verify:r2.",
+  "environment": {
+    "mode": "emulated-only",
+    "d1": "miniflare local (apps/customer-assets/tests/e2e/.state, migraciones 0001+0002+0003+0004)",
+    "r2": "bucket emulado customer-assets-local (privado, aislado del backup Studio)",
+    "mail": "fake sink vía /api/fixture/session (solo con var E2E_FIXTURE=1)",
+    "server": "vite dev efímero en 127.0.0.1:4531 (loopback exclusivo)",
+    "network": "solo 127.0.0.1; cero red real"
+  },
+  "sabotageProbe": {
+    "flag": "PORTAL_VERIFY_SABOTAGE=1 fuerza una aserción de hash equivocado en 07-publish-client-view (única etapa saboteada; 08.5-requests es independiente del digest saboteado)",
+    "thisRun": "activa: esta corrida DEBE terminar en exit 1 con 07-publish-client-view en fallo"
+  },
+  "stages": [
+    {
+      "name": "00-preflight",
+      "ok": true,
+      "assertions": 3,
+      "notes": []
+    },
+    {
+      "name": "01-boot-provision",
+      "ok": true,
+      "assertions": 4,
+      "notes": [
+        "migraciones 0001_auth + 0002_portal aplicadas a D1 emulado (estado fresco)",
+        "rutas UI precalentadas (compilación on-demand del dev server)",
+        "entorno: D1/R2 miniflare locales, mail fake sink, servidor loopback 127.0.0.1 only"
+      ]
+    },
+    {
+      "name": "02-agent-key-adopt",
+      "ok": true,
+      "assertions": 13,
+      "notes": [
+        "workspace Studio real (revisiones selladas r1/r2 existentes, sin render): d004 / d005"
+      ]
+    },
+    {
+      "name": "03-invite-login",
+      "ok": true,
+      "assertions": 6,
+      "notes": []
+    },
+    {
+      "name": "04-client-upload",
+      "ok": true,
+      "assertions": 10,
+      "notes": []
+    },
+    {
+      "name": "05-cli-material-pull",
+      "ok": true,
+      "assertions": 19,
+      "notes": []
+    },
+    {
+      "name": "06-cli-delivery-push",
+      "ok": true,
+      "assertions": 24,
+      "notes": []
+    },
+    {
+      "name": "07-publish-client-view",
+      "ok": false,
+      "assertions": 16,
+      "notes": [
+        "vista cliente reintento tras: goto: net::ERR_ABORTED at http://127.0.0.1:4531/portal/f2458805-5e5e-42ec-89e2-297185a6817b/assets\nCall log:\n  - navigating to \"http://127.0.0.1:4531/portal/f24",
+        "FALLO: SONDA DE SABOTAJE activa: la comparación contra un digest equivocado DEBE fallar"
+      ]
+    },
+    {
+      "name": "08-negatives",
+      "ok": true,
+      "assertions": 30,
+      "notes": []
+    },
+    {
+      "name": "08.5-requests",
+      "ok": true,
+      "assertions": 62,
+      "notes": []
+    },
+    {
+      "name": "09-evidence",
+      "ok": true,
+      "assertions": 10,
+      "notes": []
+    }
+  ],
+  "sha256": {
+    "materialPhotoUploaded": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5",
+    "materialPhotoRegistered": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5",
+    "materialPhotoReadBack": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5",
+    "materialPhotoImported": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5",
+    "outputFeedR1Manifest": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+    "outputFeedR1Delivered": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+    "outputFeedR2Delivered": "b8b78e43b6df18b0f0c587b7b5975c5321b6597b09e56906cdf10e1d3baf1fb6",
+    "outputFeedR1AfterR2": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+    "outputFeedR1Downloaded": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+    "requestUploadUno": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
+    "requestUploadDos": "a49392a7bde6f90cc785258c141d3d3a4a0e5a6b749a740b04fb0c482203cd4a",
+    "requestImportedUno": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
+    "requestImportedDos": "a49392a7bde6f90cc785258c141d3d3a4a0e5a6b749a740b04fb0c482203cd4a"
+  },
+  "fixtures": {
+    "photo.jpg": {
+      "source": "embebido en scripts/customer-assets-verify.ts (JPEG 32x32 real)",
+      "bytes": 280,
+      "sha256": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5"
+    },
+    "r1 feed.png": {
+      "source": "demo/studio/bfc/outputs-r1/feed.png vía revisión sellada del workspace demo",
+      "sha256": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f"
+    },
+    "r2 feed.png": {
+      "source": "demo/studio/bfc/outputs-r2/feed.png vía revisión sellada del workspace demo",
+      "sha256": "b8b78e43b6df18b0f0c587b7b5975c5321b6597b09e56906cdf10e1d3baf1fb6"
+    }
+  },
+  "commands": [
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-auth-status --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-client-adopt bfc --workspace /tmp/p005-portal-verify-T0i5ts/workspace --workspace-id a319ec87-be39-4c9d-bdde-ca90e13e61e3 --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-client-adopt second-brand --workspace /tmp/p005-portal-verify-T0i5ts/workspace --workspace-id a319ec87-be39-4c9d-bdde-ca90e13e61e3 --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-client-list --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client f2458805-5e5e-42ec-89e2-297185a6817b --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-show 6c60bada-4840-45bf-938f-2f64aa1f4fb0 --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-pull 6c60bada-4840-45bf-938f-2f64aa1f4fb0 --project demo-shared --asset bfc-cover --workspace /tmp/p005-portal-verify-T0i5ts/workspace --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-pull 6c60bada-4840-45bf-938f-2f64aa1f4fb0 --project demo-shared --asset bfc-cover --workspace /tmp/p005-portal-verify-T0i5ts/workspace --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-pull 6c60bada-4840-45bf-938f-2f64aa1f4fb0 --project demo-shared --asset bfc-cover --workspace /tmp/p005-portal-verify-T0i5ts/workspace --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p005-portal-verify-T0i5ts/workspace --client f2458805-5e5e-42ec-89e2-297185a6817b --project demo-shared --asset bfc-cover --revision d004 --outputs feed --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 1,
+      "code": "HASH_MISMATCH",
+      "message": "Los bytes locales del output difieren del manifest sellado; restaurá la revisión explícitamente antes de entregar."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts asset-restore bfc-cover --project demo-shared --revision d004 --out /tmp/p005-restore-r1-wZdH1P --workspace /tmp/p005-portal-verify-T0i5ts/workspace --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p005-portal-verify-T0i5ts/workspace --client f2458805-5e5e-42ec-89e2-297185a6817b --project demo-shared --asset bfc-cover --revision d004 --outputs feed --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p005-portal-verify-T0i5ts/workspace --client f2458805-5e5e-42ec-89e2-297185a6817b --project demo-shared --asset bfc-cover --revision d004 --outputs feed --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p005-portal-verify-T0i5ts/workspace --client f2458805-5e5e-42ec-89e2-297185a6817b --project demo-shared --asset bfc-cover --revision d004 --outputs feed --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p005-portal-verify-T0i5ts/workspace --client f2458805-5e5e-42ec-89e2-297185a6817b --project demo-shared --asset bfc-cover --revision d005 --outputs feed --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 1,
+      "code": "HASH_MISMATCH",
+      "message": "Los bytes locales del output difieren del manifest sellado; restaurá la revisión explícitamente antes de entregar."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts asset-restore bfc-cover --project demo-shared --revision d005 --out /tmp/p005-restore-r2-5M3wDf --workspace /tmp/p005-portal-verify-T0i5ts/workspace --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p005-portal-verify-T0i5ts/workspace --client f2458805-5e5e-42ec-89e2-297185a6817b --project demo-shared --asset bfc-cover --revision d005 --outputs feed --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-auth-status --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client f2458805-5e5e-42ec-89e2-297185a6817b --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client 49752b27-d45c-4a0b-ad18-e9d4f5970046 --origin http://127.0.0.1:4531 --json",
+      "exit": 2,
+      "code": "NOT_FOUND",
+      "message": "[404] not_found: Resource not found."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-client-adopt bfc --workspace /tmp/p005-portal-verify-T0i5ts/workspace --workspace-id a319ec87-be39-4c9d-bdde-ca90e13e61e3 --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 1,
+      "code": "FORBIDDEN",
+      "message": "[403] forbidden: Adoption requires a workspace-wide grant."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-auth-status --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client f2458805-5e5e-42ec-89e2-297185a6817b --origin http://127.0.0.1:4531 --json",
+      "exit": 2,
+      "code": "NOT_FOUND",
+      "message": "[404] not_found: Resource not found."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-auth-status --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-create --client f2458805-5e5e-42ec-89e2-297185a6817b --project ebaf65b6-d0ba-445b-b893-04357d6b040b --title Fotos del evento --instructions Entregar en JPG o PNG --max-files 2 --max-bytes 4MiB --expires-in 30d --origin http://127.0.0.1:9 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-create --client f2458805-5e5e-42ec-89e2-297185a6817b --project ebaf65b6-d0ba-445b-b893-04357d6b040b --title Fotos del evento --instructions Entregar en JPG o PNG --max-files 2 --max-bytes 4MiB --expires-in 30d --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-pull 49c51296-5db6-45b9-9c5e-9ea5e6782335 --project demo-shared --asset bfc-cover --workspace /tmp/p005-portal-verify-T0i5ts/workspace --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-pull 49c51296-5db6-45b9-9c5e-9ea5e6782335 --project demo-shared --asset bfc-cover --workspace /tmp/p005-portal-verify-T0i5ts/workspace --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-pull 49c51296-5db6-45b9-9c5e-9ea5e6782335 --project demo-shared --asset bfc-cover --workspace /tmp/p005-portal-verify-T0i5ts/workspace --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-pull 49c51296-5db6-45b9-9c5e-9ea5e6782335 --project demo-shared --asset bfc-cover --workspace /tmp/p005-requests-empty-yFsBQ7/workspace --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 2,
+      "code": "NOT_FOUND",
+      "message": "project demo-shared no existe."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-pull 49c51296-5db6-45b9-9c5e-9ea5e6782335 --project demo-solo --asset hello-video --workspace /tmp/p005-portal-verify-T0i5ts/workspace --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 2,
+      "code": "INVALID_INPUT",
+      "message": "El proyecto studio no se relaciona con el cliente del material; añadí el studioClientId a project.json clientIds (nunca se crea un proyecto implícito)."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-create --client f2458805-5e5e-42ec-89e2-297185a6817b --project ebaf65b6-d0ba-445b-b893-04357d6b040b --title Pedido a cerrar --max-files 1 --max-bytes 1MiB --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-link 5d9b09dc-a2eb-456d-afb2-d6d427a562e2 --expires-in 48h --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-close 5d9b09dc-a2eb-456d-afb2-d6d427a562e2 --reason Ya no hace falta --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-close 5d9b09dc-a2eb-456d-afb2-d6d427a562e2 --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 1,
+      "code": "CONFLICT",
+      "message": "[409] conflict: This request is already closed."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-create --client f2458805-5e5e-42ec-89e2-297185a6817b --project ebaf65b6-d0ba-445b-b893-04357d6b040b --title Pedido a vencer --max-files 1 --max-bytes 1MiB --expires-in 30m --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-close bc5f3f14-35e3-4fed-8e32-7033db21db9e --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 1,
+      "code": "CONFLICT",
+      "message": "[409] conflict: This request already expired and cannot be closed."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-list --client f2458805-5e5e-42ec-89e2-297185a6817b --project ebaf65b6-d0ba-445b-b893-04357d6b040b --state expired --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-list --client f2458805-5e5e-42ec-89e2-297185a6817b --project ebaf65b6-d0ba-445b-b893-04357d6b040b --origin http://127.0.0.1:4531 --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-list --client f2458805-5e5e-42ec-89e2-297185a6817b --project ebaf65b6-d0ba-445b-b893-04357d6b040b --origin http://127.0.0.1:4531 --json",
+      "exit": 1,
+      "code": "FORBIDDEN",
+      "message": "[403] forbidden: Missing required scope: requests:read"
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-request-create --client f2458805-5e5e-42ec-89e2-297185a6817b --project ebaf65b6-d0ba-445b-b893-04357d6b040b --title X --max-files 1 --max-bytes 1MiB --origin http://127.0.0.1:4531 --execute --json",
+      "exit": 1,
+      "code": "FORBIDDEN",
+      "message": "[403] forbidden: Missing required scope: requests:write"
+    }
+  ],
+  "counts": {
+    "stages": 11,
+    "stagesOk": 10,
+    "assertions": 197,
+    "cliInvocations": 41,
+    "cliOk": 30,
+    "screenshots": 5,
+    "portalClients": 2,
+    "materialsWalkthrough": 1,
+    "deliveries": 2,
+    "posts": 1,
+    "uploadRequests": 3,
+    "requestMaterialsImported": 2
+  },
+  "screenshots": [
+    {
+      "name": "desktop-admin-access-p005.png",
+      "path": "evidence/customer-assets-portal/p005-offline/desktop-admin-access-p005.png",
+      "bytes": 156594
+    },
+    {
+      "name": "mobile-materials-p005.png",
+      "path": "evidence/customer-assets-portal/p005-offline/mobile-materials-p005.png",
+      "bytes": 102395
+    },
+    {
+      "name": "mobile-assets-p005.png",
+      "path": "evidence/customer-assets-portal/p005-offline/mobile-assets-p005.png",
+      "bytes": 64641
+    },
+    {
+      "name": "mobile-grid-p005.png",
+      "path": "evidence/customer-assets-portal/p005-offline/mobile-grid-p005.png",
+      "bytes": 70056
+    },
+    {
+      "name": "desktop-grid-p005.png",
+      "path": "evidence/customer-assets-portal/p005-offline/desktop-grid-p005.png",
+      "bytes": 159319
+    }
+  ],
+  "notes": [
+    "Cadena de hashes: subido == registrado == importado == releído (material) y manifest == entregado == descargado == tras-r2 (output r1).",
+    "La key de agente viajó SOLO como env del subprocess CLI; no aparece en este archivo, screenshots ni envelopes.",
+    "Las URLs de verificación (magic link) nunca se registran; los snapshots son de páginas de catálogo/grid/admin sin secretos.",
+    "El checklist de operación en apps/customer-assets/ops/ es DOCUMENTACIÓN: nada fue aprovisionado ni aplicado."
+  ]
+}

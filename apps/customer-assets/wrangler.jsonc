@@ -1,0 +1,60 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "customer-assets",
+  // P-006: production parameterization behind G-cap-live. P-001..P-005 were
+  // emulation-only (synthetic ids); local emulation does NOT read the real
+  // ids (vitest miniflare declares its own bindings inline; the e2e vite
+  // harness overrides vars in tests/e2e/vite.config.ts), so filling the
+  // placeholders below never changes offline behavior.
+  //
+  // STAGE B (operator, behind G-cap-live):
+  //   1. `database_id` ← real id from `wrangler d1 create customer-assets-prod` (DONE 2026-10-04)
+  //   2. bucket `customer-assets-prod` confirmed by the operator: private,
+  //      isolated; NEVER the Studio backup bucket.
+  // Values that must NEVER land in this file: any secret. Secrets go through
+  // `wrangler secret put` only (BETTER_AUTH_SECRET; no email provider secret
+  // in the smoke: login = copy the link via PORTAL_LIVE_SMOKE).
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "@tanstack/react-start/server-entry",
+  "observability": {
+    "enabled": false
+  },
+  "vars": {
+    // Approved pilot origin (deployment-checklist.md §4). The deployed app
+    // must NEVER carry E2E_FIXTURE: it is dead-code of the e2e harness only.
+    "PORTAL_ORIGIN": "https://customers-assets.theelena.me",
+    // Verified sender on zone theelena.me (operator confirms before send).
+    "PORTAL_MAIL_FROM": "portal@theelena.me",
+    // Operator decision (Stage B, registered): login = copy the link. With
+    // this var the magic-link sender LOGS the single-use URL (visible only in
+    // `wrangler tail`) instead of refusing; the pilot sends ZERO emails.
+    // Remove for any real-user deployment.
+    "PORTAL_LIVE_SMOKE": "1"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "customer-assets-prod",
+      // Real id assigned at Stage B (G-cap-live, 2026-10-04): `wrangler d1 create customer-assets-prod`.
+      "database_id": "532a6841-b866-481c-a612-e4c8d5562c01"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "customer-assets-prod"
+    }
+  ],
+  // Custom domain on zone theelena.me; HTTPS managed by Cloudflare. Takes
+  // effect only at `wrangler deploy` (G-cap-live), never in local dev.
+  "routes": [
+    {
+      "pattern": "customers-assets.theelena.me",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "not_found_handling": "single-page-application"
+  }
+}
