@@ -1,7 +1,7 @@
 ---
 id: "P-001"
 title: "Auth y credenciales demostradas en D1/Workers"
-status: "pending"
+status: "accepted"
 phase_type: "investigation"
 description: "No existe auth ni app Start hoy. La documentación ofrece una ruta Drizzle SQLite + binding D1 pero no demuestra los plugins juntos. Esta unidad reduce ese riesgo antes de desarrollar todo el portal."
 end_state: "Tests Workers/D1 de login, session y API keys y prueba streaming/hash/R2 pasan; typecheck y build exit 0; versiones y configuración de adapter documentadas."
