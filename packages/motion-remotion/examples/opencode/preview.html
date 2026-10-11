@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="artifact-type" content="generic">
+  <title>OpenCode — demos y atlas</title>
+  <style>
+    :root{color-scheme:light;--paper:#f2f0e9;--ink:#162d29;--muted:#5e7068;--green:#116b50;--border:#d0d8c9}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 system-ui,sans-serif}
+    main{max-width:1280px;margin:auto;padding:36px 28px 72px}header{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border);padding-bottom:20px;font-size:12px;font-weight:700;letter-spacing:2px}
+    a{color:var(--green)}.intro{margin:36px 0 24px}.eyebrow{color:var(--green);font-size:12px;letter-spacing:2px;font-weight:700}h1{font-size:clamp(32px,5vw,58px);letter-spacing:-2px;line-height:1.1;margin:12px 0 16px}p{color:var(--muted);max-width:840px;margin:8px 0 0}
+    video{width:100%;display:block;aspect-ratio:16/9;background:#142622;border-radius:12px;margin:auto}video.portrait{aspect-ratio:9/16;width:min(100%,440px)}
+    nav,.links{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}button,.download,.links a{font:inherit;font-size:14px;padding:11px 16px;border:1px solid var(--border);border-radius:6px;color:var(--ink);background:transparent;cursor:pointer;text-decoration:none}
+    button:hover:not(:disabled),button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}button:disabled{opacity:.45;cursor:wait}button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offset:4px}.download{margin-left:auto;background:var(--green);color:white;border-color:var(--green)}
+    .note{font-size:13px}h2{font-size:26px;letter-spacing:-.6px;margin:44px 0 8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:22px}.grid.portrait{grid-template-columns:repeat(4,1fr)}figure{margin:0}figure img{display:block;width:100%;height:auto;border-radius:8px;border:1px solid var(--border)}figcaption{margin-top:10px;font-size:14px;font-weight:650}figcaption a{overflow-wrap:anywhere}footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}#status{min-height:24px}
+    @media(max-width:640px){main{padding:22px 16px 40px}.grid,.grid.portrait{grid-template-columns:1fr 1fr}header{font-size:10px}.download{margin-left:0}button,.download{flex:1;text-align:center}h1{letter-spacing:-1px}.links a{flex:1;text-align:center}}
+  </style>
+</head>
+<body>
+<main>
+  <header><span>BUILD NOTES / OPENCODE</span><span>MOTION KIT · V02</span></header>
+  <section class="intro"><div class="eyebrow">COMPONENTES PARA TUTORIALES DE CÓDIGO</div><h1>Una idea. Dos encuadres.</h1><p>La misma demostración en horizontal y vertical: terminal, código, video y anotaciones. El formato 9:16 reorganiza los paneles; no es un recorte del horizontal.</p></section>
+  <div class="links"><a href="atlas.html">Explorar el atlas de componentes</a><a href="guide.md">Guía de autoría</a><a href="atlas.json" download>Catálogo JSON para agentes</a></div>
+  <nav aria-label="Formato de la demo"><button type="button" data-format="horizontal">Horizontal · 16:9</button><button type="button" data-format="vertical">Vertical · 9:16</button></nav>
+  <video id="demo" controls playsinline preload="metadata" aria-label="Demo de componentes para tutoriales de OpenCode, sin audio"></video>
+  <nav id="chapters" aria-label="Capítulos de la demo"></nav>
+  <p id="metadata" class="note"></p>
+  <p class="note">Sin narración. Contenido ilustrativo: no es una sesión real de OpenCode. El video integrado es un MP4 generado para demostrar la reproducción.</p>
+  <p id="status" class="note" role="status">Cargando catálogo de demos…</p>
+  <h2>Los componentes, en contexto.</h2><p>Capturas del render seleccionado. El atlas incluye propiedades, ejemplos de uso y rutas al código fuente.</p>
+  <div id="gallery" class="grid"></div>
+  <footer>Demo de revisión visual. Para producir el tutorial final, prepara una captura autorizada y un guion específico.</footer>
+</main>
+<script>
+(async () => {
+  const video = document.querySelector('#demo');
+  const status = document.querySelector('#status');
+  const gallery = document.querySelector('#gallery');
+  const chapterNav = document.querySelector('#chapters');
+  const formatButtons = [...document.querySelectorAll('[data-format]')];
+  let chapterButtons = [];
+  try {
+    const response = await fetch('demo.json');
+    if (!response.ok) throw new Error('No se pudo cargar demo.json');
+    const manifest = await response.json();
+    const chapterSeconds = manifest.chapterFrames / manifest.fps;
+    function selectFormat(key) {
+      const format = manifest.formats[key];
+      video.pause();
+      video.classList.toggle('portrait', key === 'vertical');
+      video.poster = `${format.stillPrefix}1.png`;
+      video.src = format.video;
+      video.load();
+      formatButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.format === key)));
+      document.querySelector('#metadata').textContent = `${manifest.durationInFrames / manifest.fps} segundos · ${format.width} × ${format.height} · ${manifest.fps} fps`;
+      status.textContent = '';
+      gallery.classList.toggle('portrait', key === 'vertical');
+      gallery.replaceChildren();
+      chapterNav.replaceChildren();
+      chapterButtons = manifest.chapters.map((chapter, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `${String(index + 1).padStart(2, '0')} · ${chapter.label}`;
+        button.dataset.time = index * chapterSeconds;
+        button.disabled = true;
+        button.setAttribute('aria-pressed', String(index === 0));
+        button.addEventListener('click', async () => {
+          video.currentTime = index * chapterSeconds;
+          try { await video.play(); status.textContent = ''; }
+          catch { status.textContent = 'Pulsa reproducir en el video para continuar.'; }
+        });
+        chapterNav.append(button);
+        const figure = document.createElement('figure');
+        const link = document.createElement('a');
+        link.href = `${format.stillPrefix}${index + 1}.png`;
+        const image = document.createElement('img');
+        Object.assign(image, {src:link.href, alt:`${chapter.label}: ejemplo ${key}`, width:format.width, height:format.height, loading:'lazy'});
+        link.append(image);
+        const caption = document.createElement('figcaption');
+        const componentLink = document.createElement('a');
+        componentLink.href = `atlas.html#${chapter.component.split(' ')[0]}`;
+        componentLink.textContent = `${String(index + 1).padStart(2, '0')} / ${chapter.component}`;
+        caption.append(componentLink);
+        figure.append(link, caption);
+        gallery.append(figure);
+        return button;
+      });
+      const download = document.createElement('a');
+      Object.assign(download, {className:'download', href:format.video, download:format.video, textContent:`Descargar ${key === 'vertical' ? 'vertical' : 'horizontal'}`});
+      chapterNav.append(download);
+      const url = new URL(location.href);
+      url.searchParams.set('format', key);
+      history.replaceState(null, '', url);
+    }
+    video.addEventListener('loadedmetadata', () => chapterButtons.forEach(button => { button.disabled = false; }));
+    video.addEventListener('timeupdate', () => chapterButtons.forEach(button => {
+      const start = Number(button.dataset.time);
+      button.setAttribute('aria-pressed', String(video.currentTime >= start && video.currentTime < start + chapterSeconds));
+    }));
+    video.addEventListener('error', () => { status.textContent = 'Este video no está disponible. Ejecuta el render del formato seleccionado.'; });
+    formatButtons.forEach(button => button.addEventListener('click', () => selectFormat(button.dataset.format)));
+    const requested = new URLSearchParams(location.search).get('format');
+    selectFormat(requested === 'vertical' ? 'vertical' : 'horizontal');
+  } catch (error) {
+    status.textContent = `${error.message}. Regenera la página con bun run motion:tutorial --catalog-only.`;
+  }
+})();
+</script>
+</body>
+</html>

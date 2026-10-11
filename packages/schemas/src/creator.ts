@@ -32,6 +32,11 @@ export type CreatorPreset = z.infer<typeof CreatorPresetSchema>;
 export const CreatorDraftSchema = z.object({
   schemaVersion: z.literal(1), video: z.string(), cover: z.string(), title: z.string(), content: z.string(),
   platformContent: z.partialRecord(CreatorPlatformSchema, z.string()), tags: z.array(z.string().min(1)), syntheticMedia: z.boolean().nullable(),
+  /**
+   * Attribution line for third-party material ("Créditos: …"). Part of the
+   * approval digest: changing it invalidates the approval, exactly like copy.
+   */
+  sourceAttribution: z.string().trim().max(500).optional(),
   approval: z.object({ approved: z.boolean(), digest: hash.nullable() }).strict(),
 }).strict();
 export type CreatorDraft = z.infer<typeof CreatorDraftSchema>;

@@ -1,0 +1,97 @@
+{
+  "operations": [
+    {
+      "op": "initiative.create",
+      "input": {
+        "name": "serie-sabias-que",
+        "desc": "Serie full-motion 'SABÍAS QUE… TABÚ': 6 videos verticales con hechos verificados, paquete de publicación y enlace Tailscale. Plan: .plans/serie-sabias-que/ (contracts.md normativo, series.md con el detalle creativo)."
+      }
+    },
+    {
+      "op": "gate.create",
+      "input": {
+        "id": "G-start",
+        "initiative": "serie-sabias-que",
+        "title": "Autorización de implementación local (sin gasto)",
+        "body": "Preparar el plan NO autoriza construir. El operador aprueba el contrato y ejecutar P-001/P-002 y los renders locales (research, escenas, Remotion, stills, assemble, qa) sin TTS ni fal pagados. Los agentes nunca resuelven este gate.",
+        "purpose": "approval"
+      }
+    },
+    {
+      "op": "gate.create",
+      "input": {
+        "id": "G-ai-spend",
+        "initiative": "serie-sabias-que",
+        "title": "Autorización de gasto real (ElevenLabs + fal.ai)",
+        "body": "El operador fija un tope EXPLÍCITO en USD para TTS (vm gen-audio) y B-roll (vm gen-media) de la serie, y confirma que se respeta en qa/spend.json. Sin este gate, P-003/P-004 quedan blocked. No se re-submite pago incierto. No incluye publicación.",
+        "purpose": "approval"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-SSQ-001",
+        "initiative": "serie-sabias-que",
+        "title": "P-001 Investigación factual y guiones",
+        "body": "Leer .plans/serie-sabias-que/contracts.md, series.md y .plans/serie-sabias-que/phases/01-research-scripts.md completos. Modelo obligatorio xiaomi-token-plan-sgp/mimo-v2.6-pro:high. Crear series.json, scripts/verify-series.ts (5 stages) y research/<slug>/facts.json + script/<slug>.md para los 6 slugs. Regla dura: cada afirmación con sourceUrl http(s) y dateAccessed; sin fuente se reemplaza. Nada de red en el verificador. No aceptar la propia task ni resolver gates. Preservar proyectos/presets existentes.",
+        "acceptance": "cd /home/leobar37/code/video-maker && bun projects/serie-sabias-que/scripts/verify-series.ts --stage research  # exit 0",
+        "blocked_by": "G-start"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-SSQ-002",
+        "initiative": "serie-sabias-que",
+        "title": "P-002 Identidad de serie, escenas y motion",
+        "body": "Leer .plans/serie-sabias-que/contracts.md, series.md y .plans/serie-sabias-que/phases/02-series-identity-motion.md completos. Modelo obligatorio xiaomi-token-plan-sgp/mimo-v2.6-flash:high. Crear los 6 proyectos con 'bun run vm -- new', poblar video.json con las escenas de series.md, resolver un voiceId REAL (sin inventar) e implementar las escenas Remotion. Prohibido ejecutar gen-audio/gen-media. No aceptar la propia task ni resolver gates.",
+        "acceptance": "cd /home/leobar37/code/video-maker && bun projects/serie-sabias-que/scripts/verify-series.ts --stage motion && bun run vm -- still --project projects/serie-sabias-que/cuentas-no-mueren --draft  # exit 0 y PNG",
+        "blocked_by": "T-SSQ-001"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-SSQ-003",
+        "initiative": "serie-sabias-que",
+        "title": "P-003 B-roll generado y portadas",
+        "body": "Leer .plans/serie-sabias-que/contracts.md, series.md y .plans/serie-sabias-que/phases/03-generated-media-covers.md completos. Modelo obligatorio xiaomi-token-plan-sgp/mimo-v2.6-flash:high. Con G-ai-spend resuelto: 'bun run vm -- gen-media --spend-cap <tope>' solo para los slugs generated:true y 'bun run vm -- cover' para los seis. Nunca exceder el tope ni re-submitir un pago incierto; usar --plan antes. Sin secretos en logs. No aceptar la propia task ni resolver gates.",
+        "acceptance": "cd /home/leobar37/code/video-maker && bun run vm -- cover --check --project projects/serie-sabias-que/cuerpo-despues-de-morir && bun projects/serie-sabias-que/scripts/verify-series.ts --stage media  # exit 0",
+        "blocked_by": "T-SSQ-002,G-ai-spend"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-SSQ-004",
+        "initiative": "serie-sabias-que",
+        "title": "P-004 Narración TTS continua",
+        "body": "Leer .plans/serie-sabias-que/contracts.md y .plans/serie-sabias-que/phases/04-narration-tts.md completos. Modelo obligatorio xiaomi-token-plan-sgp/mimo-v2.6-flash:high. Por cada slug: 'bun run vm -- gen-audio --project <slug> --spend-cap <tope>' con el voiceId de P-002, dentro del tope de G-ai-spend. No acelerar la voz ni re-submitir una síntesis incierta. No aceptar la propia task ni resolver gates.",
+        "acceptance": "cd /home/leobar37/code/video-maker && bun projects/serie-sabias-que/scripts/verify-series.ts --stage narration  # exit 0",
+        "blocked_by": "T-SSQ-003"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-SSQ-005",
+        "initiative": "serie-sabias-que",
+        "title": "P-005 Render y QA de los seis MP4",
+        "body": "Leer .plans/serie-sabias-que/contracts.md y .plans/serie-sabias-que/phases/05-render-qa.md completos. Modelo obligatorio xiaomi-token-plan-sgp/mimo-v2.6-pro:high. Por cada slug: 'bun run vm -- assemble' y 'bun run vm -- qa'. Revisar stills (bordes/captions/sello). No cambiar guion aquí. No aceptar la propia task ni resolver gates.",
+        "acceptance": "cd /home/leobar37/code/video-maker && bun run vm -- qa --project projects/serie-sabias-que/cuerpo-despues-de-morir && bun projects/serie-sabias-que/scripts/verify-series.ts --stage final  # exit 0",
+        "blocked_by": "T-SSQ-004"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-SSQ-006",
+        "initiative": "serie-sabias-que",
+        "title": "P-006 Paquete de publicación y enlace Tailscale",
+        "body": "Leer .plans/serie-sabias-que/contracts.md y .plans/serie-sabias-que/phases/06-publish-package-link.md completos. Modelo obligatorio xiaomi-token-plan-sgp/mimo-v2.6-flash:high. Escribir publication/<slug>.draft.json (title/description/hashtags<=5/disclosure), crear serve-review.ts (bind 0.0.0.0:7099) y verificar HTTP 200/206 por Tailscale IPv4; nunca compartir localhost. Prohibido publicar en redes. No aceptar la propia task ni resolver gates.",
+        "acceptance": "cd /home/leobar37/code/video-maker && bun projects/serie-sabias-que/scripts/verify-series.ts --stage final && ss -tlnp | grep 7099 && curl -sI \"http://$(tailscale ip -4):7099/\" | head -1  # HTTP 200/206",
+        "blocked_by": "T-SSQ-005"
+      }
+    }
+  ]
+}

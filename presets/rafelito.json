@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "id": "rafelito",
+  "version": 1,
+  "name": "Rafaelito · clips de humor",
+  "identity": {
+    "palette": ["#0B0B0F", "#1F2937", "#FACC15", "#FFFFFF"],
+    "fonts": ["Arial", "Helvetica", "sans-serif"],
+    "tone": "Español, cercano y popular; humor cotidiano sin burlas a personas reales del público.",
+    "rules": [
+      "Créditos al material de origen cuando el clip no sea propio.",
+      "No cortar frases completas ni el remate: el chiste manda sobre la duración.",
+      "Publicar solo en las cuentas verificadas del perfil rafelito y con aprobación específica del render y texto actuales.",
+      "No inventar datos ni prometer resultados; describir el contenido tal como es."
+    ]
+  },
+  "editing": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": {
+      "tracks": 1,
+      "targetLufs": -16,
+      "maxTruePeakDbtp": -1.5,
+      "lufsTolerance": 1
+    },
+    "render": {
+      "videoCodec": "h264",
+      "audioCodec": "aac",
+      "pixelFormat": "yuv420p",
+      "sampleRate": 48000
+    }
+  },
+  "publishing": {
+    "provider": "zernio",
+    "profile": { "name": "rafelito", "id": "6ab159c391338fbd887b871e" },
+    "targets": [
+      {
+        "platform": "youtube",
+        "accountId": "6ab159448d284ffb2127aad2",
+        "username": "hijosdelaluzes",
+        "constraints": { "maxDurationSeconds": 180, "maxTextCharacters": 5000, "maxTitleCharacters": 100 },
+        "options": { "visibility": "public", "madeForKids": false, "categoryId": "23" }
+      },
+      {
+        "platform": "tiktok",
+        "accountId": "6ab36df08d284ffb21328410",
+        "username": "abachito32",
+        "constraints": { "maxDurationSeconds": 600, "maxTextCharacters": 2200 },
+        "options": { "privacyLevel": "PUBLIC_TO_EVERYONE", "allowComment": true, "allowDuet": false, "allowStitch": false }
+      },
+      {
+        "platform": "instagram",
+        "accountId": "6ab6be139c45ce8551769ed9",
+        "username": "inkaski",
+        "constraints": { "maxDurationSeconds": 90, "maxTextCharacters": 2200 }
+      },
+      {
+        "platform": "facebook",
+        "accountId": "6abdd3f50c42d3da3fac1c7e",
+        "username": "Rafaelito",
+        "constraints": { "maxDurationSeconds": 900, "maxTextCharacters": 5000 }
+      }
+    ],
+    "maxHashtags": 5,
+    "discloseSyntheticMediaWhenPresent": true
+  },
+  "safety": {
+    "publishRequiresExplicitApproval": true,
+    "paidGenerationRequiresNewBudgetApproval": true,
+    "neverRetryUncertainPublication": true,
+    "uploadOnlyFinalAndCover": true,
+    "preserveOriginals": true
+  }
+}

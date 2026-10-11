@@ -30,8 +30,11 @@ import {
   buildShardsManifest,
   buildWindowShards,
   buildCriticState,
+  buildSourceDownloadArgs,
   compactCandidatesForReview,
+  downloadClipSections,
   downloadClipSource,
+  parseDownloadSections,
   explainCandidate,
   applyCriticVerdicts,
   selectDistinctSpans,
@@ -2678,5 +2681,102 @@ describe('selectDistinctSpans', () => {
       selectDistinctSpans(spans, spanOf, 4, { minGapSeconds: 60 }).map((item) => item.id),
     ).toEqual(['a', 'd', 'f', 'g']);
     expect(selectDistinctSpans([], spanOf, 5)).toEqual([]);
+  });
+
+  test('parseDownloadSections normalizes, sorts and merges ranges', () => {
+    expect(parseDownloadSections('1700-1760')).toEqual([{ startSec: 1700, endSec: 1760 }]);
+    expect(parseDownloadSections('*1700-1760*')).toEqual([{ startSec: 1700, endSec: 1760 }]);
+    expect(parseDownloadSections('1800-1860, 1700-1760')).toEqual([
+      { startSec: 1700, endSec: 1760 },
+      { startSec: 1800, endSec: 1860 },
+    ]);
+    expect(parseDownloadSections('10-30, 20-40')).toEqual([{ startSec: 10, endSec: 40 }]);
+    expect(parseDownloadSections('10-20, 20-30')).toEqual([{ startSec: 10, endSec: 30 }]);
+    expect(parseDownloadSections('5-6.5')).toEqual([{ startSec: 5, endSec: 6.5 }]);
+    expect(() => parseDownloadSections('')).toThrow(/empty section spec/);
+    expect(() => parseDownloadSections('abc')).toThrow(/cannot read "abc"/);
+    expect(() => parseDownloadSections('10-10')).toThrow(/end > start/);
+    expect(() => parseDownloadSections('20-10')).toThrow(/end > start/);
+  });
+
+  test('buildSourceDownloadArgs carries quality, proxy, section and output', () => {
+    const base = buildSourceDownloadArgs({ url: 'https://youtu.be/x', target: '/p/clips/source.mp4' });
+    expect(base).toContain('--js-runtimes');
+    expect(base).toContain(
+      'bestvideo[height<=1080][protocol^=http]+bestaudio[protocol^=http]/bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio',
+    );
+    expect(base).toContain('--force-overwrites');
+    expect(base).not.toContain('--proxy');
+    expect(base).not.toContain('--download-sections');
+    expect(base.slice(-2)).toEqual(['/p/clips/source.mp4', 'https://youtu.be/x']);
+
+    const section = buildSourceDownloadArgs({
+      url: 'u',
+      target: 't',
+      proxy: 'http://127.0.0.1:8118',
+      section: { startSec: 1700, endSec: 1760 },
+      maxHeight: 720,
+    });
+    expect(section[section.indexOf('--proxy') + 1]).toBe('http://127.0.0.1:8118');
+    expect(section[section.indexOf('--downloader-args') + 1]).toBe('ffmpeg:-http_proxy http://127.0.0.1:8118');
+    expect(section[section.indexOf('--download-sections') + 1]).toBe('*1700-1760');
+    expect(section[section.indexOf('-f') + 1]).toBe(
+      'bestvideo[height<=720][protocol^=http]+bestaudio[protocol^=http]/bestvideo[height<=720]+bestaudio/bestvideo[height<=720]+bestaudio',
+    );
+    expect(base).not.toContain('--downloader-args');
+  });
+
+  test('downloadClipSections writes one file per range with the exact wire args', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-clip-sections-'));
+    const { runner, calls } = fakeProcess((_command, args) => {
+      writeFileSync(args[args.indexOf('-o') + 1]!, 'x');
+      return { code: 0, stdout: '', stderr: '' };
+    });
+    const paths = await downloadClipSections(
+      runner,
+      dir,
+      'https://youtu.be/x',
+      [
+        { startSec: 10, endSec: 20 },
+        { startSec: 30, endSec: 40 },
+      ],
+      { proxy: 'http://127.0.0.1:8118' },
+    );
+    expect(paths).toHaveLength(2);
+    expect(paths[0]).toMatch(/clips\/sections\/01-10-20\.mp4$/);
+    expect(paths[1]).toMatch(/02-30-40\.mp4$/);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.args).toEqual(
+      buildSourceDownloadArgs({
+        url: 'https://youtu.be/x',
+        target: paths[0]!,
+        proxy: 'http://127.0.0.1:8118',
+        section: { startSec: 10, endSec: 20 },
+      }),
+    );
+  });
+
+  test('reuseExisting keeps the current source without spawning yt-dlp', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-clip-reuse-'));
+    await mkdir(join(dir, 'clips'), { recursive: true });
+    await writeFile(join(dir, 'clips/source.mp4'), 'keepme');
+    const { runner, calls } = fakeProcess(() => ({ code: 0, stdout: '', stderr: '' }));
+    const path = await downloadClipSource(runner, dir, 'https://youtu.be/x', { reuseExisting: true });
+    expect(path).toBe(join(dir, 'clips/source.mp4'));
+    expect(calls).toHaveLength(0);
+  });
+
+  test('downloadClipSections fails naming the section and refuses bad input', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'vm-clip-sections-bad-'));
+    const { runner } = fakeProcess(() => ({ code: 1, stdout: '', stderr: 'boom' }));
+    await expect(
+      downloadClipSections(runner, dir, 'https://youtu.be/x', [{ startSec: 5, endSec: 9 }]),
+    ).rejects.toThrow(/5-9/);
+    await expect(downloadClipSections(runner, dir, 'https://youtu.be/x', [])).rejects.toThrow(
+      /at least one section/,
+    );
+    await expect(
+      downloadClipSections(runner, dir, 'local.mp4', [{ startSec: 5, endSec: 9 }]),
+    ).rejects.toThrow(/http\(s\) URL/);
   });
 });

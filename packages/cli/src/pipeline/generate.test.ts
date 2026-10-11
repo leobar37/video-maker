@@ -95,7 +95,7 @@ describe('runGenMedia', () => {
         falVideo: {
           provider: 'fal',
           qualityTier: 'support',
-          preset: 'fal-ai/kling-video',
+          preset: 'kling-2.5-turbo-standard-i2v',
           initialImage: 'assets/first.png',
           promptFile: 'scenes/scene-v/prompt.txt',
           duration: 5,
@@ -130,5 +130,13 @@ describe('runGenMedia', () => {
     expect(latest.command).toBe('gen-media');
     expect(latest.subject).toContain('gen-media:scene-v:');
     expect(latest.receipt?.requestId).toContain('fake-fal-video-job');
+    // The preset KEY resolves to the fal queue route + pinned request shape;
+    // it is never used raw as a URL segment (that route does not exist).
+    expect(deps.calls.submits[0]?.input.params).toMatchObject({
+      modelId: 'fal-ai/kling-video/v2.5-turbo/standard/image-to-video',
+      durationFormat: 'plain',
+      defaultInput: {},
+      firstFrameField: 'image_url',
+    });
   });
 });

@@ -131,3 +131,28 @@ describe('creator local contracts', () => {
     await expect(loadProject(project)).rejects.toThrow();
   });
 });
+
+describe('sourceAttribution', () => {
+  test('is part of the approval digest, so changing it invalidates approval', async () => {
+    const { project } = await fixture();
+    const draft = await readyLocal(project);
+    const before = (await planPublication(project, 0)).digest;
+    await writeJson(project, 'publication/draft.json', {
+      ...draft,
+      sourceAttribution: 'Créditos: Podcast Sinvergüenza de Kerry Kambell',
+      approval: { approved: true, digest: before },
+    });
+    const after = await planPublication(project, 0);
+    expect(after.digest).not.toBe(before);
+    expect(after.blockers.join(' ')).toContain('approval.digest');
+  });
+
+  test('the draft contract rejects an overlong attribution and accepts a short one', () => {
+    const base = {
+      schemaVersion: 1 as const, video: 'v', cover: 'c', title: 't', content: 'c',
+      platformContent: {}, tags: [], syntheticMedia: null, approval: { approved: false, digest: null },
+    };
+    expect(DraftSchema.parse({ ...base, sourceAttribution: 'Créditos: JH de la Cruz' }).sourceAttribution).toBe('Créditos: JH de la Cruz');
+    expect(() => DraftSchema.parse({ ...base, sourceAttribution: 'x'.repeat(501) })).toThrow();
+  });
+});

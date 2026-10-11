@@ -70,6 +70,10 @@ export const KNOWN_MODEL_CHAR_LIMITS: Record<string, number> = {
   eleven_v3: 5000,
   eleven_multilingual_v2: 10000,
   eleven_flash_v2_5: 40000,
+  // Official per-request ceiling reported by this account's GET /v1/models
+  // (`maximum_text_length_per_request: 10000`). Eleven v4 Turbo has no
+  // confirmed limit on that endpoint, so no invented entry for it.
+  eleven_v4: 10000,
 };
 
 /** Fail locally (before spending a request) when the script exceeds the limit. */
@@ -96,6 +100,38 @@ export function effectiveVoiceSettings(
     use_speaker_boost: true,
     ...(settings ?? {}),
   };
+}
+
+/**
+ * Models that accept ONLY `stability` and `similarity_boost`: Eleven v4 and v4
+ * Turbo reject/ignore Style and Speed sliders and have no speaker boost
+ * (docs: "Style and Speed sliders are not available in Eleven v4, and SSML is
+ * not supported"; account `GET /v1/models` reports `can_use_style: false` and
+ * `can_use_speaker_boost: false`).
+ */
+export const V4_MODEL_IDS: Record<string, true> = {
+  eleven_v4: true,
+  eleven_v4_turbo: true,
+};
+
+/**
+ * Model-aware voice settings for the request body. Keeps `effectiveVoiceSettings`
+ * untouched for callers (CLI narration fingerprinting) but strips every key the
+ * model does not accept, so v4 requests never carry default `style` /
+ * `use_speaker_boost` / `speed` values it cannot honor.
+ */
+export function effectiveVoiceSettingsForModel(
+  modelId: string,
+  settings: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const effective = effectiveVoiceSettings(settings);
+  if (!V4_MODEL_IDS[modelId]) return effective;
+  const filtered: Record<string, unknown> = {};
+  if (effective.stability !== undefined) filtered.stability = effective.stability;
+  if (effective.similarity_boost !== undefined) {
+    filtered.similarity_boost = effective.similarity_boost;
+  }
+  return filtered;
 }
 
 /**
@@ -194,6 +230,12 @@ export interface TtsSubmitParams {
   language?: string;
   voiceSettings?: Record<string, unknown>;
   pronunciationDictionaryId?: string;
+  /**
+   * Optional ElevenLabs body flag: use the IVC version of a Professional Voice
+   * Clone (may improve expressiveness and reduce latency). Omitted when the
+   * caller does not set it — the API default is `false`, so no default here.
+   */
+  usePvcAsIvc?: boolean;
   outputFormat: string;
   outputPath: string;
   transcode: boolean;
@@ -232,6 +274,13 @@ function parseTtsParams(params: Record<string, unknown>): TtsSubmitParams {
   }
   const estimatedCostUsd = optionalNumberParam(params, 'estimatedCostUsd', 'params');
   if (estimatedCostUsd !== undefined) parsed.estimatedCostUsd = estimatedCostUsd;
+  const usePvcAsIvc = params.usePvcAsIvc;
+  if (usePvcAsIvc !== undefined) {
+    if (typeof usePvcAsIvc !== 'boolean') {
+      throw new MediaProviderError('INVALID_PARAMS', 'params.usePvcAsIvc must be a boolean.');
+    }
+    parsed.usePvcAsIvc = usePvcAsIvc;
+  }
   return parsed;
 }
 
@@ -249,7 +298,8 @@ export function buildTtsRequest(params: TtsSubmitParams, apiKey: string): TtsReq
       text: params.text,
       model_id: params.modelId,
       ...(languageCode ? { language_code: languageCode } : {}),
-      voice_settings: effectiveVoiceSettings(params.voiceSettings),
+      voice_settings: effectiveVoiceSettingsForModel(params.modelId, params.voiceSettings),
+      ...(params.usePvcAsIvc !== undefined ? { use_pvc_as_ivc: params.usePvcAsIvc } : {}),
       ...(params.pronunciationDictionaryId
         ? {
             pronunciation_dictionary_locators: [

@@ -5,6 +5,8 @@
  * artifact — a tampered or re-rendered file can never pass silently.
  */
 import {
+  EVIDENCE_REPORT_RELATIVE,
+  LOUDNESS_REPORT_RELATIVE,
   loudnessCheck,
   qaPassed,
   readEvidenceReport,
@@ -49,11 +51,21 @@ export async function runQa(options: QaOptions): Promise<QaRunResult> {
   const video = options.video ?? evidence.result.mp4;
   const checks: QaCheck[] = [];
 
-  // Hash verification covers every produced artifact AND the result mp4.
+  // Hash verification covers every produced artifact AND the result mp4 —
+  // except the QA-owned reports: `vm qa` itself rewrites `qa/report.json` and
+  // `qa/loudness.json` (see the spec's `writes`; loudness embeds a fresh
+  // timestamp), so pinning them would flag every re-run as tampering. Render
+  // and media artifacts stay pinned; a tampered or re-rendered file can never
+  // pass silently.
+  const qaOwned: Record<string, true> = {
+    [LOUDNESS_REPORT_RELATIVE]: true,
+    [EVIDENCE_REPORT_RELATIVE]: true,
+  };
+  const pinned = evidence.artifacts.filter((artifact) => qaOwned[artifact.path] !== true);
   const recorded = evidence.result.mp4 === video
-    ? evidence.artifacts
+    ? pinned
     : [
-        ...evidence.artifacts,
+        ...pinned,
         { path: evidence.result.mp4, role: 'result', sha256: evidence.result.sha256, bytes: 0 },
       ];
   checks.push(await verifyArtifactHashes(projectDir, recorded));

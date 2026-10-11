@@ -1,0 +1,14 @@
+# serie-sabias-que — modelos exactos del standard orchestrate-session.
+# IDs verificados con `omp models xiaomi-token-plan-sgp --json` (2026-10-05); no hay fuzzy match silencioso.
+# Fuente versionada; enlace en ~/code/dotfiles/omp/profiles/serie-sabias-que.yml
+setupVersion: 2
+modelRoles:
+  # orquestador y trabajo pesado: Mimo v2.6 Pro
+  default: xiaomi-token-plan-sgp/mimo-v2.6-pro:high
+  slow:    xiaomi-token-plan-sgp/mimo-v2.6-pro:high
+  plan:    xiaomi-token-plan-sgp/mimo-v2.6-pro:high
+  advisor: xiaomi-token-plan-sgp/mimo-v2.6-pro:high
+  # tareas fáciles / mecánicas: Mimo v2.6 Flash
+  smol:    xiaomi-token-plan-sgp/mimo-v2.6-flash:high
+  tiny:    xiaomi-token-plan-sgp/mimo-v2.6-flash:high
+  commit:  xiaomi-token-plan-sgp/mimo-v2.6-flash:high

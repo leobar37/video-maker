@@ -321,6 +321,138 @@ export async function probeSource(process: ProcessRunner, srcPath: string): Prom
 }
 
 /**
+ * One `--download-sections` range on the source clock, in seconds.
+ */
+export interface DownloadSection {
+  startSec: number;
+  endSec: number;
+}
+
+/**
+ * Parses a section spec into sorted, merged, positive-length ranges.
+ *
+ * Accepts `"1700-1760"`, `"*1700-1760"` and comma/space separated lists
+ * (`"1700-1760, 1800-1860"`). Overlapping or touching ranges are merged so the
+ * same seconds are never requested twice.
+ */
+export function parseDownloadSections(spec: string): DownloadSection[] {
+  const parts = spec
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) throw new Error('parseDownloadSections: empty section spec.');
+  const ranges: DownloadSection[] = [];
+  for (const part of parts) {
+    const match = /^\*?\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*\*?$/.exec(part);
+    if (!match) {
+      throw new Error(
+        `parseDownloadSections: cannot read "${part}" — expected a range like "1700-1760".`,
+      );
+    }
+    const startSec = Number(match[1]);
+    const endSec = Number(match[2]);
+    if (endSec <= startSec) {
+      throw new Error(`parseDownloadSections: "${part}" must have end > start.`);
+    }
+    ranges.push({ startSec, endSec });
+  }
+  ranges.sort((a, b) => a.startSec - b.startSec);
+  const merged: DownloadSection[] = [];
+  for (const range of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && range.startSec <= last.endSec) {
+      last.endSec = Math.max(last.endSec, range.endSec);
+    } else {
+      merged.push({ ...range });
+    }
+  }
+  return merged;
+}
+
+/**
+ * yt-dlp argv for one remote fetch. Pure so the wire format is testable without
+ * a binary, and shared by the whole-source and per-section paths.
+ *
+ * `proxy` is an HTTP proxy URL: yt-dlp honors it for its own requests and, for
+ * `--download-sections`, forwards it to the ffmpeg child through the proxy
+ * environment, which is what makes ranged fetches work over a SOCKS tunnel.
+ */
+export function buildSourceDownloadArgs(options: {
+  url: string;
+  target: string;
+  proxy?: string;
+  section?: DownloadSection;
+  maxHeight?: number;
+  jsRuntime?: string;
+  /** Extra yt-dlp `--extractor-args` (e.g. a player-client hint), passed verbatim. */
+  extractorArgs?: string;
+}): string[] {
+  const maxHeight = options.maxHeight ?? 1080;
+  const args = [
+    '--no-playlist',
+    // Re-running an ingest must REFRESH the project source: yt-dlp otherwise
+    // skips an existing output file (stale quality).
+    '--force-overwrites',
+    // YouTube needs a JS runtime for stream URLs (yt-dlp EJS); bun is the
+    // repo's own runtime and is always on PATH here.
+    '--js-runtimes',
+    options.jsRuntime ?? 'bun',
+    // Video-only + separate audio, merged to mp4. The selector NEVER falls back
+    // to the muxed 360p "format 18": video+audio streams are the floor.
+    '-f',
+    // Prefer direct https video+audio: YouTube's HLS "Premium" variant for the
+    // same height can be ~3x the bitrate, and ranged --download-sections over
+    // HLS is far slower through a proxy. Falls back to any protocol, then 720p.
+    [
+      `bestvideo[height<=${maxHeight}][protocol^=http]+bestaudio[protocol^=http]`,
+      `bestvideo[height<=${maxHeight}]+bestaudio`,
+      'bestvideo[height<=720]+bestaudio',
+    ].join('/'),
+    '--merge-output-format',
+    'mp4',
+  ];
+  if (options.extractorArgs) args.push('--extractor-args', options.extractorArgs);
+  if (options.proxy) {
+    args.push('--proxy', options.proxy);
+    // ffmpeg performs the ranged fetch for --download-sections and does NOT
+    // inherit yt-dlp's --proxy: without this the child request goes direct and
+    // the range download stalls (or 403s). Validated: 30 s of 1080p in 19 s.
+    args.push('--downloader-args', `ffmpeg:-http_proxy ${options.proxy}`);
+  }
+  if (options.section) {
+    args.push('--download-sections', `*${options.section.startSec}-${options.section.endSec}`);
+  }
+  args.push('-o', options.target, options.url);
+  return args;
+}
+
+export interface DownloadClipSourceOptions {
+  ytdlpBin?: string;
+  /** Extra yt-dlp `--extractor-args`; the caller owns extractor-specific hints. */
+  extractorArgs?: string;
+  /** HTTP proxy URL (e.g. a local bridge in front of a SOCKS tunnel). */
+  proxy?: string;
+  /** Video height ceiling for the selector (default 1080). */
+  maxHeight?: number;
+  /**
+   * Keep an existing `clips/source.mp4` instead of refreshing it. Opt-in on
+   * purpose: the default refreshes to avoid silently publishing stale quality.
+   */
+  reuseExisting?: boolean;
+}
+
+async function assertDownloaded(target: string, label: string): Promise<void> {
+  try {
+    await stat(target);
+  } catch (cause) {
+    throw new Error(
+      `${label} reported success but ${target} is missing — check the URL and the yt-dlp options.`,
+      { cause },
+    );
+  }
+}
+
+/**
  * Fetch a remote source with yt-dlp into `<projectDir>/clips/source.mp4` — the
  * canonical project source that `clip-transcribe` consumes by default. Returns
  * the local path; local files never reach this function (`runClipFrames` uses
@@ -330,7 +462,7 @@ export async function downloadClipSource(
   process: ProcessRunner,
   projectDir: string,
   url: string,
-  options?: { ytdlpBin?: string },
+  options?: DownloadClipSourceOptions,
 ): Promise<string> {
   if (!isRemoteSource(url)) {
     throw new Error(`downloadClipSource: expected an http(s) URL, got "${url}".`);
@@ -338,40 +470,81 @@ export async function downloadClipSource(
   const bin = options?.ytdlpBin ?? 'yt-dlp';
   await mkdir(join(projectDir, 'clips'), { recursive: true });
   const target = join(projectDir, 'clips', 'source.mp4');
-  const result = await process.run(bin, [
-    '--no-playlist',
-    // Re-running `clip-frames --src <url>` must REFRESH the project source:
-    // yt-dlp otherwise skips an existing output file (stale quality).
-    '--force-overwrites',
-    // YouTube needs a JS runtime for stream URLs (yt-dlp EJS); bun is the
-    // repo's own runtime and is always on PATH here.
-    '--js-runtimes',
-    'bun',
-    // 1080p video-only + separate audio, merged to mp4. The selector NEVER
-    // falls back to the muxed 360p "format 18": video+audio streams are the
-    // floor, so the sharp source the native crop needs is guaranteed.
-    '-f',
-    'bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio',
-    '--merge-output-format',
-    'mp4',
-    '-o',
-    target,
-    url,
-  ]);
+  if (options?.reuseExisting) {
+    try {
+      const existing = await stat(target);
+      if (existing.size > 0) return target;
+    } catch {
+      // fall through to a fresh download
+    }
+  }
+  const result = await process.run(
+    bin,
+    buildSourceDownloadArgs({
+      url,
+      target,
+      ...(options?.proxy ? { proxy: options.proxy } : {}),
+      ...(options?.maxHeight ? { maxHeight: options.maxHeight } : {}),
+      ...(options?.extractorArgs ? { extractorArgs: options.extractorArgs } : {}),
+    }),
+  );
   if (result.code !== 0) {
     throw new Error(
       `${bin} failed for ${url} (exit ${result.code}): ${result.stderr.slice(-300)}`,
     );
   }
-  try {
-    await stat(target);
-  } catch (cause) {
-    throw new Error(
-      `${bin} reported success but ${target} is missing — check the URL and the yt-dlp options.`,
-      { cause },
-    );
-  }
+  await assertDownloaded(target, bin);
   return target;
+}
+
+/**
+ * Fast ingest path: download ONLY the requested ranges, one file per range, into
+ * `<projectDir>/clips/sections/`. Transfer is proportional to the selected
+ * seconds instead of the whole video, which is the difference between minutes
+ * and an hour on a throttled/unblocked-proxy route.
+ */
+export async function downloadClipSections(
+  process: ProcessRunner,
+  projectDir: string,
+  url: string,
+  sections: readonly DownloadSection[],
+  options?: DownloadClipSourceOptions,
+): Promise<string[]> {
+  if (!isRemoteSource(url)) {
+    throw new Error(`downloadClipSections: expected an http(s) URL, got "${url}".`);
+  }
+  if (sections.length === 0) {
+    throw new Error('downloadClipSections: at least one section is required.');
+  }
+  const bin = options?.ytdlpBin ?? 'yt-dlp';
+  const dir = join(projectDir, 'clips', 'sections');
+  await mkdir(dir, { recursive: true });
+  const paths: string[] = [];
+  for (const [index, section] of sections.entries()) {
+    const target = join(
+      dir,
+      `${String(index + 1).padStart(2, '0')}-${section.startSec}-${section.endSec}.mp4`,
+    );
+    const result = await process.run(
+      bin,
+      buildSourceDownloadArgs({
+        url,
+        target,
+        section,
+        ...(options?.proxy ? { proxy: options.proxy } : {}),
+        ...(options?.maxHeight ? { maxHeight: options.maxHeight } : {}),
+        ...(options?.extractorArgs ? { extractorArgs: options.extractorArgs } : {}),
+      }),
+    );
+    if (result.code !== 0) {
+      throw new Error(
+        `${bin} failed for section ${section.startSec}-${section.endSec} (exit ${result.code}): ${result.stderr.slice(-300)}`,
+      );
+    }
+    await assertDownloaded(target, `${bin} (section ${section.startSec}-${section.endSec})`);
+    paths.push(target);
+  }
+  return paths;
 }
 
 /**

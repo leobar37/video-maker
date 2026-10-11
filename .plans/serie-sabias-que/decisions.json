@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "plan": "serie-sabias-que",
+  "goal": "G-001",
+  "initiative": "serie-sabias-que",
+  "operator": "leobar37",
+  "decisions": [
+    {
+      "id": "D-001",
+      "topic": "Formato",
+      "decision": "6 videos verticales full-motion (1080x1920, 30fps, H.264/AAC, 45-60s), formato 'sabías que', sin cara y sin footage de terceros.",
+      "source": "petición del operador (2026-10-05)"
+    },
+    {
+      "id": "D-002",
+      "topic": "Temática",
+      "decision": "Temas tabú + curiosidad viral, platform-safe (muerte, privacidad, dinero, mentira, conocimiento prohibido, sueño/cuerpo). Prohibido gore/sexual/drogas/consejo médico.",
+      "source": "petición del operador + contracts.md §2"
+    },
+    {
+      "id": "D-003",
+      "topic": "Modelos",
+      "decision": "Orquestador = xiaomi-token-plan-sgp/mimo-v2.6-pro:high; worker = xiaomi-token-plan-sgp/mimo-v2.6-flash:high. Verificados contra 'omp models' (sin fuzzy match).",
+      "source": "petición del operador (2026-10-05)"
+    },
+    {
+      "id": "D-004",
+      "topic": "Verdad factual",
+      "decision": "Toda afirmación 'sabías que' requiere sourceUrl http(s) verificable; sin fuente, el beat se reemplaza. No se inventan IDs, cifras ni sincronías.",
+      "source": "regla del preset + contracts.md §2"
+    },
+    {
+      "id": "D-005",
+      "topic": "Entrega",
+      "decision": "La entrega es 'listos para publicar': MP4 verificados + paquete de publicación + enlace Tailscale. La publicación social queda FUERA del goal (G-publish, solo operador).",
+      "source": "petición del operador (2026-10-05)"
+    },
+    {
+      "id": "D-006",
+      "topic": "Gasto",
+      "decision": "TTS y fal se ejecutan solo tras G-ai-spend resuelto por el operador, con tope explícito en USD registrado en qa/spend.json.",
+      "source": "SAFETY GUARDS / preset.paidGenerationRequiresNewBudgetApproval"
+    },
+    {
+      "id": "D-007",
+      "topic": "Red",
+      "decision": "El enlace de revisión se sirve desde 0.0.0.0:7099 y se comparte como http://<tailscale-ipv4>:7099/. Nunca localhost.",
+      "source": "AGENTS.md networking rules"
+    }
+  ],
+  "open_questions": [
+    "voiceId español exacto (se resuelve en P-002 con evidencia; no se inventa).",
+    "Tope de gasto en USD para TTS y fal (lo fija el operador en G-ai-spend)."
+  ]
+}

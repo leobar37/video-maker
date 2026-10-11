@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "javascript-asincrono-youtube",
+  "version": 1,
+  "name": "Leobar · JavaScript asíncrono (horizontal, YouTube largo)",
+  "identity": {
+    "palette": ["#081118", "#163A43", "#6AE6DF", "#FFFFFF"],
+    "fonts": ["Arial", "Helvetica", "sans-serif"],
+    "tone": "Español, primera persona, práctico, curioso y honesto; sin promesas absolutas ni hype.",
+    "rules": [
+      "La voz y el argumento mandan: conservar frases completas antes que forzar duración.",
+      "Títulos breves y motion ligado a lo que se dice; no interrumpir voz con tarjetas de transición.",
+      "Subtítulos WordSubtitles configurables, sobre el pecho en cámara y sin tapar la cara ni pegarlos al borde.",
+      "Distinguir pantalla ilustrativa de captura sincronizada; no presentar un proceso como prueba de éxito.",
+      "Publicar solo en las cuentas verificadas del perfil leobar y con aprobación específica del render y texto actuales.",
+      "Este proyecto declara un único destino: el canal YouTube leobar3787; no hereda los demás destinos del preset leobar."
+    ]
+  },
+  "editing": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "captions": {
+      "component": "WordSubtitles",
+      "cameraYPercent": 72,
+      "screenYPercent": 72,
+      "maxWords": 6,
+      "maxChars": 40,
+      "fontSize": 44,
+      "accentColor": "#6AE6DF",
+      "textColor": "#FFFFFF"
+    },
+    "audio": {
+      "source": "original",
+      "tracks": 1,
+      "ttsByDefault": false,
+      "musicByDefault": false,
+      "targetLufs": -16,
+      "lufsTolerance": 1,
+      "maxTruePeakDbtp": -1.5,
+      "normalizationTargetTruePeakDbtp": -2
+    },
+    "cuts": {
+      "requireAcousticEvidence": true,
+      "neverCutFromAsrAlone": true,
+      "preserveEffectPoses": true,
+      "preserveCompletePhrases": true
+    },
+    "render": {
+      "strategy": "existing-continuous-horizontal-render",
+      "videoCodec": "h264",
+      "pixelFormat": "yuvj420p",
+      "audioCodec": "aac",
+      "sampleRate": 48000,
+      "audioBitrate": "192k"
+    }
+  },
+  "publishing": {
+    "provider": "zernio",
+    "profile": { "name": "leobar", "id": "6ab44f589c4fc6a894efdfff" },
+    "targets": [
+      {
+        "platform": "youtube",
+        "accountId": "6ab44f978d284ffb2137f7b9",
+        "username": "leobar3787",
+        "constraints": { "maxDurationSeconds": 600, "maxTextCharacters": 5000, "maxTitleCharacters": 100 },
+        "options": { "visibility": "public", "madeForKids": false, "categoryId": "28" }
+      }
+    ],
+    "maxHashtags": 5,
+    "discloseSyntheticMediaWhenPresent": true
+  },
+  "safety": {
+    "publishRequiresExplicitApproval": true,
+    "paidGenerationRequiresNewBudgetApproval": true,
+    "neverRetryUncertainPublication": true,
+    "uploadOnlyFinalAndCover": true,
+    "preserveOriginals": true
+  }
+}

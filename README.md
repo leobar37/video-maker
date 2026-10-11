@@ -14,6 +14,25 @@ del monorepo `elena`). Bun workspaces, sin dependencias del monorepo origen.
 | `@videomaker/motion-core` / `@videomaker/motion-remotion` | Frame math, timing continuo, composición `Film`, render adapter |
 | `@videomaker/cli` | CLI declarativa de producción (comandos como datos) |
 
+## Tutoriales de código y atlas de componentes
+
+Punto de entrada para personas y agentes: [guía de demostraciones](docs/tutorial-demos.md).
+El [atlas JSON](packages/motion-remotion/src/tutorial/atlas.json) contiene rutas,
+propiedades, ejemplos y límites de cada componente; el atlas visual se genera
+junto a las demos. Ejemplo ejecutable: [OpenCode](packages/motion-remotion/examples/opencode/Root.tsx).
+
+```bash
+bun run motion:tutorial --catalog-only  # generar atlas y páginas, sin render
+bun run motion:tutorial --stills        # capturas de ambos formatos
+bun run motion:tutorial                 # videos 16:9 y 9:16
+bun run motion:tutorial --format vertical
+bun run motion:tutorial:preview         # preview y atlas, puerto 8140
+```
+
+La guía explica el acceso por Tailscale, la adaptación vertical y el checklist
+de validación. Las fuentes son versionables; los renders y las páginas generadas
+en `docs/artifacts/opencode-motion-kit/` quedan ignorados por git.
+
 ## Comandos
 
 ```bash
@@ -58,6 +77,8 @@ tener `schemaVersion`, `videoId`, `language`, `durationSec` y segmentos
 ## Workflow compartido por clientes y redes
 
 Guía común: [edición → QA → aprobación → publicación](docs/creator-workflow.md).
+Pipeline de clips (ingesta por tramos, corte con snapping a silencio, rúbrica de selección
+y publicación por lotes): [docs/clip-pipeline.md](docs/clip-pipeline.md).
 `creator-*` consume un preset explícito de cliente y reglas por destino; no depende
 de leobar, de una red ni de una cantidad fija de cuentas. Cada proyecto empieza
 sin aprobaciones ni publicaciones heredadas.

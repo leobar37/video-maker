@@ -34,6 +34,58 @@ export const ClipSelectionTranscriptSchema = z.strictObject({
 });
 export type ClipSelectionTranscript = z.infer<typeof ClipSelectionTranscriptSchema>;
 
+
+const ClipSelectionLevelsSchema = z.array(z.string().trim().min(1).max(120)).min(2).max(10);
+const UnitScoreSchema = z.number().finite().min(0).max(1);
+
+/**
+ * Optional override of the built-in editorial rubric.
+ *
+ * The persisted evaluation keeps its four canonical signal slots
+ * (`hook`, `value`, `autonomy`, `closure`) and its two gates
+ * (`standalone`, `faithful`); this override rewrites the PROMPTS, the LEVEL
+ * LABELS, the WEIGHTS and the routing thresholds for a given request. Arbitrary
+ * new signal ids would change the stored contract, so they are deliberately out
+ * of scope here.
+ */
+export const ClipSelectionRubricOverrideSchema = z.strictObject({
+  instructions: z
+    .strictObject({
+      hook: TextSchema.optional(),
+      value: TextSchema.optional(),
+      autonomy: TextSchema.optional(),
+      closure: TextSchema.optional(),
+    })
+    .optional(),
+  levels: z
+    .strictObject({
+      hook: ClipSelectionLevelsSchema.optional(),
+      value: ClipSelectionLevelsSchema.optional(),
+      autonomy: ClipSelectionLevelsSchema.optional(),
+      closure: ClipSelectionLevelsSchema.optional(),
+    })
+    .optional(),
+  weights: z
+    .strictObject({
+      hook: z.number().finite().min(0).max(1),
+      value: z.number().finite().min(0).max(1),
+      autonomy: z.number().finite().min(0).max(1),
+      closure: z.number().finite().min(0).max(1),
+    })
+    .refine(
+      (weights) => weights.hook + weights.value + weights.autonomy + weights.closure > 0,
+      { message: 'Rubric weights must not all be zero.' },
+    )
+    .optional(),
+  /** Minimum quality (0-100) for a `suggested` route (default 75). */
+  minQuality: z.number().finite().min(0).max(100).optional(),
+  /** Minimum Score confidence to accept a suggestion (default 0.80). */
+  confidenceFloor: UnitScoreSchema.optional(),
+  /** Minimum standalone/faithful gate value to accept a suggestion (default 0.95). */
+  gateFloor: UnitScoreSchema.optional(),
+});
+export type ClipSelectionRubricOverride = z.infer<typeof ClipSelectionRubricOverrideSchema>;
+
 export const ClipSelectionRequestSchema = z.strictObject({
   schemaVersion: z.literal(1),
   /** Relative to the request file; containment is checked against --project. */
@@ -48,6 +100,16 @@ export const ClipSelectionRequestSchema = z.strictObject({
   }).refine(value => value.maxSec >= value.minSec, { message: 'maxSec must be >= minSec.' }),
   maxCandidates: z.number().int().min(1).max(500).default(100),
   model: z.literal('jev-1.13.0').default('jev-1.13.0'),
+  /** Rewrite prompts/levels/weights/thresholds without changing the result contract. */
+  rubric: ClipSelectionRubricOverrideSchema.optional(),
+  /** Reaction-peaks JSON (`{events:[{peakSec,riseDb}]}`) folded into the ranking. */
+  reactionPeaks: z.string().min(1).max(4096).optional(),
+  /**
+   * Weight 0-1 given to the audience-reaction bonus when re-ranking. Optional
+   * WITHOUT a default on purpose: injecting a value would change the selection
+   * digest of every existing request and invalidate its paid cache.
+   */
+  reactionWeight: z.number().finite().min(0).max(1).optional(),
   timeoutMs: z.number().int().min(100).max(120_000).default(10_000),
   deadlineMs: z.number().int().min(100).max(3_600_000).default(120_000),
 });

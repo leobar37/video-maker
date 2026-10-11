@@ -18,6 +18,7 @@ import {
   type VideoConfig,
 } from '@videomaker/core';
 import {
+  getFalVideoPreset,
   useMusicBed,
   type MediaArtifact,
   type MediaProvider,
@@ -525,6 +526,9 @@ async function falVideoParams(
   const scene = config.scenes.find((entry) => entry.id === sceneId);
   const fal = scene?.falVideo;
   if (!scene || !fal) throw new Error(`gen-media: scene "${sceneId}" has no falVideo request.`);
+  // `fal.preset` names a preset key, not a fal route: resolve it so the queue
+  // submit hits the preset's model endpoint with its pinned request shape.
+  const preset = getFalVideoPreset(fal.preset);
   const prompt = await readProjectText(projectDir, fal.promptFile);
   const source = await projectFileBytes(projectDir, fal.initialImage);
   const inputs: Record<string, unknown> = {
@@ -539,9 +543,13 @@ async function falVideoParams(
       : {}),
   };
   const params: Record<string, unknown> = {
-    modelId: fal.preset,
+    modelId: preset.modelId,
     prompt,
     durationSeconds: fal.duration,
+    durationFormat: preset.durationFormat === 'suffixed' ? 'suffixed' : 'plain',
+    defaultInput: { ...(preset.defaultInput ?? {}) },
+    firstFrameField:
+      preset.firstFrameInputField === undefined ? 'image_url' : preset.firstFrameInputField,
     source,
     outputPath,
     ...(fal.negativePromptFile !== undefined

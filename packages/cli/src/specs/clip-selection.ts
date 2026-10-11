@@ -18,7 +18,9 @@ import {
 import { PROJECT_ARG, resolveProjectDir } from '../args';
 import {
   buildSelectionCandidates, buildSelectionEvaluationRequest, finalizeSelectionEntriesV2,
-  renderSelectionReport, routeSelectionEvaluation, selectionEvaluation,
+  renderSelectionReport, routeSelectionEvaluation, selectionEvaluation, reactionBonusForCandidates,
+  resolveThresholds, resolveWeights,
+  type ClipSelectionThresholds, type ClipSelectionWeights,
   CLIP_SELECTION_POLICY_VERSION, CLIP_SELECTION_RUBRIC_VERSION,
   TYPESAFE_INPUT_PRICE_PER_MILLION, TYPESAFE_MAX_CALL_USD,
 } from '../pipeline/clip-selection';
@@ -101,6 +103,9 @@ async function prepareSelection(ctx: CommandRunContext): Promise<PreparedSelecti
 
 interface SelectionJob {
   candidate: ClipSelectionCandidate;
+  /** Effective rubric weights/thresholds for this request. */
+  weights: ClipSelectionWeights;
+  thresholds: ClipSelectionThresholds;
   payload: TypesafeEvaluationRequest;
   digest: string;
   cachePath: string;
@@ -122,12 +127,14 @@ function selectionPaidPlan(job: SelectionJob, model: ClipSelectionRequest['model
 
 async function selectionJobs(prepared: PreparedSelection, ledger?: FileSpendLedger): Promise<SelectionJob[]> {
   const jobs: SelectionJob[] = [];
+  const weights = resolveWeights(prepared.request.rubric);
+  const thresholds = resolveThresholds(prepared.request.rubric);
   for (const candidate of prepared.candidates) {
     const payload = buildSelectionEvaluationRequest(candidate, prepared.transcript, prepared.request);
     validateTypesafeRequest(payload);
     const digest = sha256Json({ selectionDigest: prepared.selectionDigest, candidate, payload, rubricVersion: CLIP_SELECTION_RUBRIC_VERSION, policyVersion: CLIP_SELECTION_POLICY_VERSION });
     const cachePath = await containedFile(prepared.root, prepared.cacheDir, `${digest}.json`);
-    const job: SelectionJob = { candidate, payload, digest, cachePath, cacheRelative: relative(prepared.root, cachePath), subject: `clips-select:${digest}` };
+    const job: SelectionJob = { candidate, weights, thresholds, payload, digest, cachePath, cacheRelative: relative(prepared.root, cachePath), subject: `clips-select:${digest}` };
     let cached: unknown;
     try { cached = (await jsonInput(cachePath, 1_000_000)).value; } catch (error) { if (!isMissing(error)) throw error; }
     if (cached !== undefined) {
@@ -162,9 +169,9 @@ function evaluatedEntry(
     attempt.receipt?.requestId !== `typesafe-response:${sha256Json(response)}`) {
     throw new Error('Evaluation has no matching durable paid evidence.');
   }
-  const evaluation = selectionEvaluation(response, job.cacheRelative);
+  const evaluation = selectionEvaluation(response, job.cacheRelative, job.weights);
   return ClipSelectionResultEntryV2Schema.parse({
-    candidate: job.candidate, lifecycle: 'evaluated', ...routeSelectionEvaluation(evaluation),
+    candidate: job.candidate, lifecycle: 'evaluated', ...routeSelectionEvaluation(evaluation, job.thresholds),
     evaluation, attempt: ClipSelectionAttemptEvidenceSchema.parse(attempt),
     cached: Boolean(job.cached), cutStatus: 'needs_audio_video_review', approvedForPublication: false,
   });
@@ -346,7 +353,17 @@ async function executeSelection(ctx: CommandRunContext, prepared: PreparedSelect
       .reduce((sum, attempt) => sum + attempt.reservedUsd, 0);
     spend.openReservedUsd = latest.filter(attempt => attempt.state === 'uncertain' || attempt.state === 'submitted')
       .reduce((sum, attempt) => sum + attempt.reservedUsd, 0);
-    const finalized = finalizeSelectionEntriesV2(entries, prepared.request.maxClips);
+    let reactionBonus: Record<string, number> = {};
+    if (prepared.request.reactionPeaks) {
+      const peaksPath = await containedFile(prepared.root, dirname(prepared.requestPath), prepared.request.reactionPeaks);
+      const peaksInput = await jsonInput(peaksPath, 2_000_000);
+      const events = (peaksInput.value as { events?: { peakSec?: unknown; riseDb?: unknown }[] }).events ?? [];
+      const peaks = events
+        .filter((event): event is { peakSec: number; riseDb: number } => typeof event.peakSec === 'number' && typeof event.riseDb === 'number')
+        .map((event) => ({ peakSec: event.peakSec, riseDb: event.riseDb }));
+      reactionBonus = reactionBonusForCandidates(prepared.candidates, peaks, prepared.request.reactionWeight ?? 0);
+    }
+    const finalized = finalizeSelectionEntriesV2(entries, prepared.request.maxClips, { reactionBonus });
     const warnings = [
       'Thresholds and weights are initial editorial policy, not calibrated guarantees. Review audio/video before cutting.',
       'Candidates use contiguous segment boundaries, <=256 segments per window, one speaker, and gaps <=2s; word-level cut accuracy is not certified.',
@@ -354,6 +371,7 @@ async function executeSelection(ctx: CommandRunContext, prepared: PreparedSelect
     ];
     if (prepared.proposedCount > jobs.length) warnings.push(`Uniformly sampled ${jobs.length} of ${prepared.proposedCount} proposed windows across the source.`);
     if (!jobs.length) warnings.push('No valid candidate windows fit the requested duration and speaker continuity.');
+    if (Object.keys(reactionBonus).length) warnings.push(`Audience-reaction bonus applied to ${Object.keys(reactionBonus).length} candidate(s) at weight ${prepared.request.reactionWeight ?? 0}; the stored quality is unchanged (ranking only).`);
     if (stopped) warnings.push('Evaluation stopped after an error/deadline; inspect qa/spend.json and reconcile uncertain attempts before any retry.');
     const complete = finalized.every(entry => entry.lifecycle === 'evaluated');
     const result = ClipSelectionResultV2Schema.parse({

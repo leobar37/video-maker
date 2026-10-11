@@ -10,6 +10,8 @@
     "studio:verify:r2": "bun scripts/studio-verify-r2.ts",
     "providers:smoke": "bun packages/providers/scripts/smoke.ts",
     "motion:still": "bun packages/motion-remotion/scripts/motion-still.ts",
+    "motion:tutorial": "bun packages/motion-remotion/scripts/tutorial-demo.ts",
+    "motion:tutorial:preview": "bun packages/motion-remotion/scripts/tutorial-preview.ts",
     "vm": "bun packages/cli/src/main.ts",
     "demo:dry": "bun packages/cli/scripts/demo-dry.ts",
     "demo:e2e": "bun packages/cli/scripts/demo-e2e.ts"

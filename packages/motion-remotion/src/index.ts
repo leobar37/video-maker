@@ -27,6 +27,9 @@ export * from './Subtitles';
 export * from './types';
 export * from './word-captions';
 export * from './WordSubtitles';
+export * from './tutorial/primitives';
+export * from './tutorial/panels';
+export * from './tutorial/terminal-model';
 
 // Type-only surface of the render pipeline (functions live on the subpath).
 export type {

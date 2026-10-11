@@ -9,6 +9,8 @@ import {
 import {
   buildSelectionCandidates, buildSelectionEvaluationRequest, finalizeSelectionEntries,
   finalizeSelectionEntriesV2, renderSelectionReport, routeSelectionEvaluation,
+  applyRubricOverride, reactionBonusForCandidates, resolveThresholds, resolveWeights,
+  DEFAULT_THRESHOLDS, GUARD_PREFIX, WEIGHTS,
 } from './clip-selection';
 
 const request = ClipSelectionRequestSchema.parse({ schemaVersion: 1, transcript: 'transcript.json', audience: 'Fundadores', objective: 'Aprendizajes', maxClips: 3, duration: { minSec: 20, maxSec: 40 } });
@@ -346,5 +348,80 @@ describe('clip selection V2 ranking and readable versioned evidence', () => {
     expect(report).toContain('&#96;raw&#96;');
     expect(report).toContain('&#92;');
     expect(result.entries.filter(value => value.lifecycle === 'evaluated')).toHaveLength(9);
+  });
+});
+
+describe('rubric override', () => {
+  const rubricRequest = ClipSelectionRequestSchema.parse({
+    schemaVersion: 1, transcript: 'transcript.json', audience: 'Fundadores', objective: 'Aprendizajes',
+    maxClips: 1, duration: { minSec: 20, maxSec: 40 },
+    rubric: { instructions: { hook: 'Rewritten hook instruction for this request.' }, levels: { hook: ['a', 'b'] }, weights: { hook: 0.6, value: 0.2, autonomy: 0.2, closure: 0.2 }, minQuality: 40 },
+  });
+
+  test('defaults keep the built-in weights and thresholds', () => {
+    expect(resolveWeights(undefined)).toEqual({ ...WEIGHTS });
+    expect(resolveThresholds(undefined)).toEqual(DEFAULT_THRESHOLDS);
+    expect(resolveThresholds({ minQuality: 40, gateFloor: 0.5, confidenceFloor: 0.2 })).toEqual({
+      minQuality: 40, gateFloor: 0.5, confidenceFloor: 0.2,
+    });
+  });
+
+  test('weights are normalized to sum 1', () => {
+    const weights = resolveWeights(rubricRequest.rubric);
+    // 0.6 + 0.2 + 0.2 + 0.2 = 1.2, so the effective weights are normalized.
+    expect(weights.hook).toBeCloseTo(0.5, 10);
+    expect(weights.value).toBeCloseTo(1 / 6, 10);
+    expect(weights.value + weights.hook + weights.autonomy + weights.closure).toBeCloseTo(1, 10);
+  });
+
+  test('only the overridden slots change and the guard is re-prepended', () => {
+    const candidate = buildSelectionCandidates(transcript, request).candidates[0]!;
+    const base = buildSelectionEvaluationRequest(candidate, transcript, request);
+    const custom = buildSelectionEvaluationRequest(candidate, transcript, rubricRequest);
+    const customHook = custom.questions.hook;
+    const customValue = custom.questions.value;
+    const baseValue = base.questions.value;
+    if (customHook?.type !== 'score' || customValue?.type !== 'score' || baseValue?.type !== 'score') {
+      throw new Error('expected score questions');
+    }
+    expect(customHook.instructions).toBe(`${GUARD_PREFIX}Rewritten hook instruction for this request.`);
+    expect(customHook.criteria).toEqual(['a', 'b']);
+    expect(customValue.instructions).toBe(baseValue.instructions);
+    expect(customValue.criteria).toEqual(baseValue.criteria);
+    expect(custom.questions.standalone!.instructions).toBe(base.questions.standalone!.instructions);
+  });
+
+  test('applyRubricOverride is the identity without a rubric', () => {
+    const candidate = buildSelectionCandidates(transcript, request).candidates[0]!;
+    const base = buildSelectionEvaluationRequest(candidate, transcript, request);
+    expect(applyRubricOverride(base, undefined)).toBe(base);
+  });
+});
+
+describe('audience-reaction fusion', () => {
+  const candidates = buildSelectionCandidates(transcript, request).candidates;
+
+  test('bonus is normalized against the loudest peak and windowed', () => {
+    const target = candidates[0]!;
+    const inside = { peakSec: (target.sourceRange.startSec + target.sourceRange.endSec) / 2, riseDb: 5 };
+    const bonus = reactionBonusForCandidates([target], [inside, { peakSec: 5000, riseDb: 10 }], 0.5);
+    expect(bonus[target.id]).toBeCloseTo(25, 6);
+  });
+
+  test('weight 0, no peaks or no peaks in the window yield no bonus', () => {
+    const target = candidates[0]!;
+    expect(reactionBonusForCandidates([target], [{ peakSec: 10, riseDb: 5 }], 0)).toEqual({});
+    expect(reactionBonusForCandidates([target], [], 1)).toEqual({});
+    expect(reactionBonusForCandidates([target], [{ peakSec: 99999, riseDb: 5 }], 1)).toEqual({});
+  });
+
+  test('the bonus reorders the ranking without touching stored quality', () => {
+    const low = entryV2('low', 0, 20, 70);
+    const high = entryV2('high', 40, 60, 80);
+    expect(finalizeSelectionEntriesV2([low, high], 1)[0]!.candidate.id).toBe('high');
+    const withBonus = finalizeSelectionEntriesV2([low, high], 1, { reactionBonus: { low: 20 } });
+    expect(withBonus[0]!.candidate.id).toBe('low');
+    expect(withBonus[0]!.evaluation!.quality).toBe(70);
+    expect(finalizeSelectionEntriesV2([low, high], 1, { reactionBonus: {} })[0]!.candidate.id).toBe('high');
   });
 });

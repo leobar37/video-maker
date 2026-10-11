@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="artifact-type" content="generic">
+  <title>Atlas — componentes de tutoriales</title>
+  <style>
+    :root{--paper:#f2f0e9;--ink:#162d29;--muted:#5e7068;--accent:#116b50;--border:#d0d8c9}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,sans-serif}main{max-width:1240px;margin:auto;padding:36px 28px 72px}a{color:var(--accent)}header{display:flex;gap:24px;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:20px;font-size:14px}h1{font-size:clamp(34px,5vw,60px);line-height:1.1;letter-spacing:-2px;margin:36px 0 16px}h2{font-size:28px;letter-spacing:-.7px;margin:8px 0}p{color:var(--muted)}.links{display:flex;gap:20px;flex-wrap:wrap}.filters{display:grid;grid-template-columns:1fr 230px;gap:20px;margin:30px 0 12px}label{display:block;font-size:13px;font-weight:650}input,select{display:block;width:100%;margin-top:8px;padding:13px;border:1px solid var(--border);border-radius:6px;background:#fffef8;color:var(--ink);font:inherit}a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:4px}#index{display:flex;flex-wrap:wrap;gap:10px;padding:0;list-style:none}#index a{display:block;padding:8px 12px;border:1px solid var(--border);border-radius:5px;font:13px monospace;text-decoration:none}.card{border-top:1px solid var(--border);padding:30px 0;scroll-margin-top:24px}.tag{font:12px monospace;color:var(--accent);text-transform:uppercase;letter-spacing:1px}.source{font:13px/1.6 monospace;overflow-wrap:anywhere}.body{display:grid;grid-template-columns:310px 1fr;gap:28px;margin-top:20px}.preview img{width:100%;height:auto;display:block;border-radius:8px}.preview small{display:block;color:var(--muted);margin-top:8px}.preview.portrait img{max-width:210px;margin:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#142622;color:#eef3e8;padding:22px;border-radius:8px;font:13px/1.65 monospace;margin:0 0 18px}summary{cursor:pointer;color:var(--accent);font-weight:650;padding:12px 0}dl{margin:0}dt{font:14px monospace;font-weight:700;margin-top:14px}dd{margin:5px 0 14px;color:var(--muted);font-size:14px}.limits{padding-left:20px;color:var(--muted);font-size:14px}#related{border-top:1px solid var(--border);padding-top:30px}.related-item{margin-top:22px}.related-item code{font-size:12px;overflow-wrap:anywhere}.note{font-size:13px}footer{border-top:1px solid var(--border);margin-top:40px;padding-top:24px;color:var(--muted);font-size:13px}
+    @media(max-width:720px){main{padding:24px 16px}.filters,.body{grid-template-columns:1fr}.preview{max-width:430px}.preview.portrait img{max-width:230px}header{flex-wrap:wrap}h1{letter-spacing:-1px}}
+  </style>
+</head>
+<body>
+<main>
+  <header><strong>BUILD NOTES / ATLAS</strong><a href="./">Ver las demos</a></header>
+  <h1>Encuentra la pieza.<br>Construye la explicación.</h1>
+  <p>Componentes reutilizables con ejemplos, propiedades y rutas al código. El catálogo sirve tanto para explorar visualmente como para orientar a otros agentes.</p>
+  <div class="links"><a href="guide.md">Guía de autoría y validación</a><a href="atlas.json" download>Descargar catálogo JSON</a><a href="?format=vertical">Capturas verticales</a></div>
+  <div class="filters"><label>Buscar componente, propósito o etiqueta<input id="search" type="search" placeholder="terminal, video, cursor, diff…"></label><label>Formato de las capturas<select id="format"><option value="horizontal">Horizontal · 16:9</option><option value="vertical">Vertical · 9:16</option></select></label></div>
+  <p id="status" class="note" role="status">Cargando catálogo…</p>
+  <ul id="index" aria-label="Índice de componentes"></ul>
+  <section id="catalog" aria-label="Componentes de tutorial"></section>
+  <section id="related"><h2>Otras piezas del kit</h2><p>Mapa complementario; no son requisitos para crear esta demo. Consultar sus tipos y restricciones antes de reutilizarlas.</p><div id="related-list"></div></section>
+  <footer>Fuente canónica: <code>packages/motion-remotion/src/tutorial/atlas.json</code>. Las firmas TypeScript son la autoridad de tipos. Las capturas muestran componentes en contexto y no son grabaciones reales de OpenCode.</footer>
+</main>
+<script>
+(async () => {
+  const status = document.querySelector('#status');
+  const catalog = document.querySelector('#catalog');
+  const index = document.querySelector('#index');
+  const search = document.querySelector('#search');
+  const formatSelect = document.querySelector('#format');
+  const element = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  };
+  const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  try {
+    const responses = await Promise.all([fetch('atlas.json'), fetch('demo.json')]);
+    if (responses.some(response => !response.ok)) throw new Error('Falta el catálogo generado');
+    const [atlas, demo] = await Promise.all(responses.map(response => response.json()));
+    formatSelect.value = new URLSearchParams(location.search).get('format') === 'vertical' ? 'vertical' : 'horizontal';
+    function render() {
+      const query = normalize(search.value.trim());
+      const selected = atlas.components.filter(component => normalize([component.id, component.summary, component.category, ...component.tags].join(' ')).includes(query));
+      catalog.replaceChildren();
+      index.replaceChildren();
+      status.textContent = `${selected.length} de ${atlas.components.length} componentes. Busca por nombre, uso o etiqueta.`;
+      const format = demo.formats[formatSelect.value];
+      for (const component of selected) {
+        const item = element('li');
+        const indexLink = element('a', component.id);
+        indexLink.href = `#${component.id}`;
+        item.append(indexLink);
+        index.append(item);
+        const card = element('article', undefined, 'card');
+        card.id = component.id;
+        card.append(element('div', `${component.category} / ${component.tags.join(' · ')}`, 'tag'));
+        card.append(element('h2', component.id), element('p', component.summary));
+        card.append(element('div', `import { ${component.id} } from '${atlas.importFrom}'`, 'source'));
+        card.append(element('div', component.source, 'source'));
+        const body = element('div', undefined, 'body');
+        const preview = element('div', undefined, `preview ${formatSelect.value === 'vertical' ? 'portrait' : ''}`);
+        const imageLink = element('a');
+        imageLink.href = `${format.stillPrefix}${component.chapter}.png`;
+        const image = element('img');
+        Object.assign(image, {src:imageLink.href, alt:`${component.id} en contexto ${formatSelect.value}`, width:format.width, height:format.height, loading:'lazy'});
+        imageLink.append(image);
+        preview.append(imageLink, element('small', `Ejemplo en contexto · capítulo ${component.chapter}`));
+        const content = element('div');
+        content.append(element('pre', component.example));
+        const details = element('details');
+        details.append(element('summary', `Propiedades (${Object.keys(component.props).length})`));
+        const props = element('dl');
+        for (const [name, description] of Object.entries(component.props)) props.append(element('dt', name), element('dd', description));
+        details.append(props);
+        content.append(details);
+        const limits = element('ul', undefined, 'limits');
+        component.limits.forEach(limit => limits.append(element('li', limit)));
+        content.append(limits);
+        body.append(preview, content);
+        card.append(body);
+        catalog.append(card);
+      }
+      const url = new URL(location.href);
+      url.searchParams.set('format', formatSelect.value);
+      history.replaceState(null, '', url);
+    }
+    search.addEventListener('input', render);
+    formatSelect.addEventListener('change', render);
+    for (const related of atlas.relatedComponents) {
+      const item = element('div', undefined, 'related-item');
+      item.append(element('strong', related.id), element('p', related.summary), element('code', related.source));
+      document.querySelector('#related-list').append(item);
+    }
+    render();
+    if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView();
+  } catch (error) {
+    status.textContent = `${error.message}. Ejecuta bun run motion:tutorial --catalog-only.`;
+  }
+})();
+</script>
+</body>
+</html>

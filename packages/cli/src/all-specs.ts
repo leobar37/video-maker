@@ -12,6 +12,8 @@ import {
   clipRenderSpecs,
 } from './specs/clip';
 import { clipSelectionSpecs } from './specs/clip-selection';
+import { clipIngestSpecs } from './specs/clip-ingest';
+import { clipCutSpecs } from './specs/clip-cut';
 import { ingestSpecs } from './specs/ingest';
 import { inspectSpecs } from './specs/inspect';
 import { mediaSpecs } from './specs/media';
@@ -45,5 +47,5 @@ const versionSpec: CommandSpec = {
 
 /** Every command of the CLI, in display order. */
 export function allSpecs(): CommandSpec[] {
-  return [...inspectSpecs, ...sceneSpecs, ...mediaSpecs, ...creatorSpecs, ...creatorBatchSpecs, ...ingestSpecs, ...socialSpecs, ...persistSpecs, ...clipAnalysisSpecs, ...clipSelectionSpecs, ...clipDecisionSpecs, ...clipRenderSpecs, ...studioSpecs, ...studioSyncSpecs, ...studioDashboardSpecs, versionSpec];
+  return [...inspectSpecs, ...sceneSpecs, ...mediaSpecs, ...creatorSpecs, ...creatorBatchSpecs, ...ingestSpecs, ...socialSpecs, ...persistSpecs, ...clipAnalysisSpecs, ...clipIngestSpecs, ...clipCutSpecs, ...clipSelectionSpecs, ...clipDecisionSpecs, ...clipRenderSpecs, ...studioSpecs, ...studioSyncSpecs, ...studioDashboardSpecs, versionSpec];
 }

@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "title": "Atlas de componentes para tutoriales de código",
+  "importFrom": "@videomaker/motion-remotion",
+  "guide": "docs/tutorial-demos.md",
+  "example": "packages/motion-remotion/examples/opencode/Root.tsx",
+  "notes": [
+    "La API de tipos vive en los archivos TS/TSX; este catálogo es el índice de descubrimiento.",
+    "Todos los ejemplos visuales se renderizan dentro de Remotion; las capturas muestran componentes en contexto.",
+    "Los tiempos están en frames locales de Sequence salvo que se indique otra unidad."
+  ],
+  "components": [
+    {
+      "id": "TerminalWindow",
+      "category": "Contenido",
+      "tags": ["terminal", "comando", "typing", "cursor", "scroll"],
+      "summary": "Terminal guionada con escritura progresiva, cursor y salida incremental reproducible por frame.",
+      "source": "packages/motion-remotion/src/tutorial/panels.tsx",
+      "chapter": 1,
+      "props": {
+        "entries": "Obligatorio. readonly TerminalEntry[]: {text, at, duration?, kind}. kind: command | output | success | comment. at/duration en frames locales.",
+        "title": "string; default ~/project. Texto de la barra de ventana.",
+        "prompt": "string; default ❯. Prefijo de las líneas de comando.",
+        "fontSize": "number; default 30. Tamaño en píxeles de composición.",
+        "maxRows": "number entero positivo; default 11. Máximo de líneas lógicas visibles, incluidos saltos de línea."
+      },
+      "example": "<TerminalWindow title=\"~/mi-proyecto\" entries={[\n  { text: 'opencode', at: 15, duration: 30, kind: 'command' },\n  { text: '# Explica tu tarea', at: 70, kind: 'comment' },\n]} />",
+      "limits": ["No ejecuta comandos ni emula una shell.", "maxRows no mide el wrapping visual; dividir salidas largas.", "Necesita un contenedor con altura definida. El caret pertenece al último evento si es command."],
+      "related": ["TerminalEntry", "TerminalRow", "terminalRows", "DesktopWindow"]
+    },
+    {
+      "id": "CodePanel",
+      "category": "Contenido",
+      "tags": ["código", "code", "diff", "highlight", "líneas"],
+      "summary": "Código pretokenizado con colores, numeración, selección de líneas y marcas de cambios.",
+      "source": "packages/motion-remotion/src/tutorial/panels.tsx",
+      "chapter": 2,
+      "props": {
+        "filename": "Obligatorio. string; nombre visible del archivo.",
+        "lines": "Obligatorio. readonly CodeLine[]. Cada línea: {tokens: CodeToken[], change?: added | removed}.",
+        "highlightLines": "readonly number[]; default []. Números de línea visibles, de base uno, incluyendo firstLine.",
+        "firstLine": "number; default 1. Primer número de línea mostrado.",
+        "fontSize": "number; default 29. Tamaño en píxeles."
+      },
+      "example": "<CodePanel filename=\"hello.ts\" highlightLines={[1]} lines={[{\n  change: 'added',\n  tokens: [{text: 'const ', kind: 'keyword'}, {text: 'name = '},\n    {text: '\"Elena\"', kind: 'string'}, {text: ';'}],\n}]} />",
+      "limits": ["No calcula diffs ni hace syntax highlighting automático: acepta tokens del autor o de un adaptador.", "CodeToken.kind: plain | keyword | string | number | comment | function | type; omitido equivale a plain.", "Es un fragmento visual, no un editor ni un ejecutor. El contenido largo puede exceder la altura del panel."],
+      "related": ["CodeLine", "CodeToken", "DesktopWindow"]
+    },
+    {
+      "id": "ScreenRecording",
+      "category": "Medios",
+      "tags": ["video", "mp4", "captura", "zoom", "pantalla"],
+      "summary": "Reproduce un video dentro de un marco de escritorio, con trim, zoom y overlays.",
+      "source": "packages/motion-remotion/src/tutorial/primitives.tsx",
+      "chapter": 3,
+      "props": {
+        "src": "Obligatorio. string; URL o staticFile('archivo.mp4') resuelto desde publicDir.",
+        "title": "string; default Grabación de pantalla.",
+        "badge": "string; default VIDEO. Etiqueta de la barra superior.",
+        "startFrom": "number; default 0. Primer frame de fuente, medido al FPS de la composición.",
+        "endAt": "number opcional. Final exclusivo en frames de fuente.",
+        "muted": "boolean; default true. Evita duplicar audio con la narración de la composición.",
+        "zoom": "number; default 1. Se limita por abajo a 1. Un valor mayor puede recortar los bordes.",
+        "focus": "{x:number,y:number}; default {x:50,y:50}. Origen del zoom en porcentajes de 0 a 100.",
+        "overlay": "ReactNode opcional; capa encima del video."
+      },
+      "example": "<ScreenRecording src={staticFile('captura.mp4')}\n  title=\"Mi sesión\" startFrom={30} endAt={270} muted\n  zoom={1.1} focus={{x:30,y:40}}\n  overlay={<TutorialPointer x={45} y={65} label=\"Mira este cambio\" />}\n/>",
+      "limits": ["No captura pantalla, no detecta eventos ni genera una grabación real.", "Conserva el aspect ratio con contain; preparar una fuente adecuada para cada orientación.", "La demo usa un MP4 ilustrativo. Una sesión real necesita su propia captura autorizada."],
+      "related": ["DesktopWindow", "TutorialPointer", "DemoCamera"]
+    },
+    {
+      "id": "TutorialLayout",
+      "category": "Estructura",
+      "tags": ["layout", "horizontal", "vertical", "16:9", "9:16", "título"],
+      "summary": "Canvas de tutorial que adapta márgenes y disposición de la anotación a la orientación real de Remotion.",
+      "source": "packages/motion-remotion/src/tutorial/primitives.tsx",
+      "chapter": 4,
+      "props": {
+        "eyebrow": "Obligatorio. string; etiqueta de sección encima del título.",
+        "title": "Obligatorio. string; título principal. Mantenerlo corto.",
+        "step": "Obligatorio. string; indicador de progreso visible.",
+        "children": "Obligatorio. ReactNode; contenido del área principal.",
+        "description": "string opcional; texto debajo del título.",
+        "aside": "ReactNode opcional; lateral en horizontal, debajo del contenido en vertical.",
+        "series": "string; default BUILD NOTES. Marca de serie independiente del contenido.",
+        "topic": "string; default OPENCODE. Nombre visible del tema.",
+        "footer": "string; default DEMO ILUSTRATIVA · NO ES UNA SESIÓN REAL DE OPENCODE. Sustituirlo según el contenido real."
+      },
+      "example": "<TutorialLayout eyebrow=\"01 / INICIO\" title=\"Abre tu proyecto.\"\n  step=\"01 — 03\" series=\"MI SERIE\" topic=\"MI HERRAMIENTA\"\n  footer=\"EJEMPLO ILUSTRATIVO\"\n  aside={<Callout number=\"01\" title=\"Contexto\">Una idea clara.</Callout>}>\n  <TerminalWindow entries={[]} />\n</TutorialLayout>",
+      "limits": ["La orientación se deriva de width/height de la composición, no del navegador ni de una prop CSS.", "El contenido hijo decide cómo reorganizar sus propios paneles. No convierte una escena arbitraria a vertical.", "Las zonas seguras de cada red social requieren una revisión adicional."],
+      "related": ["Callout", "tutorialTheme"]
+    },
+    {
+      "id": "Callout",
+      "category": "Anotación",
+      "tags": ["anotación", "nota", "paso", "explicación"],
+      "summary": "Nota explicativa numerada con entrada suave y jerarquía de texto.",
+      "source": "packages/motion-remotion/src/tutorial/primitives.tsx",
+      "chapter": 1,
+      "props": {
+        "number": "Obligatorio. string; identificador del paso.",
+        "title": "Obligatorio. string; encabezado breve.",
+        "children": "Obligatorio. ReactNode; explicación.",
+        "from": "number; default 0. Frame local de inicio; entrada dura 15 frames."
+      },
+      "example": "<Callout number=\"01\" title=\"Un comando a la vez\" from={45}>\n  Deja una pausa para leer antes de continuar.\n</Callout>",
+      "limits": ["No dibuja flechas ni calcula anclajes a regiones.", "Usar una explicación breve para no desplazar el contenido vertical."],
+      "related": ["TutorialLayout", "TutorialPointer"]
+    },
+    {
+      "id": "TutorialPointer",
+      "category": "Anotación",
+      "tags": ["cursor", "puntero", "overlay", "señalar"],
+      "summary": "Puntero ilustrativo con etiqueta, colocado manualmente sobre un panel.",
+      "source": "packages/motion-remotion/src/tutorial/primitives.tsx",
+      "chapter": 2,
+      "props": {
+        "x": "Obligatorio. number; porcentaje horizontal relativo al ancestro posicionado.",
+        "y": "Obligatorio. number; porcentaje vertical relativo al ancestro posicionado.",
+        "label": "string opcional; etiqueta visible junto al puntero."
+      },
+      "example": "<div style={{position:'relative', height:500}}>\n  <TerminalWindow entries={[]} />\n  <TutorialPointer x={10} y={70} label=\"Revisa el resultado\" />\n</div>",
+      "limits": ["No sigue automáticamente el cursor real ni las interacciones de una captura.", "El autor debe evitar que la etiqueta se salga del panel o tape texto relevante."],
+      "related": ["ScreenRecording", "DemoCamera"]
+    },
+    {
+      "id": "DesktopWindow",
+      "category": "Estructura",
+      "tags": ["ventana", "marco", "contenedor", "desktop"],
+      "summary": "Marco común de escritorio con barra de título y área de contenido recortada.",
+      "source": "packages/motion-remotion/src/tutorial/primitives.tsx",
+      "chapter": 1,
+      "props": {
+        "title": "Obligatorio. string; título de la ventana.",
+        "children": "Obligatorio. ReactNode; contenido de la ventana.",
+        "badge": "string opcional; etiqueta a la derecha del título.",
+        "style": "CSSProperties opcional; overrides del contenedor externo."
+      },
+      "example": "<div style={{height:600}}>\n  <DesktopWindow title=\"Mi panel\" badge=\"DEMO\">\n    <div style={{padding:32}}>Contenido personalizado</div>\n  </DesktopWindow>\n</div>",
+      "limits": ["Requiere una altura definida en el padre.", "Oculta overflow; verificar texto largo y elementos superpuestos antes de renderizar todo."],
+      "related": ["TerminalWindow", "CodePanel", "ScreenRecording"]
+    }
+  ],
+  "relatedComponents": [
+    {"id":"Film","source":"packages/motion-remotion/src/Film.tsx","summary":"Secuenciador de escenas y audio para proyectos con FilmProps; no obligatorio para la demo directa con Sequence."},
+    {"id":"SceneRenderer / registerScene","source":"packages/motion-remotion/src/SceneRenderer.tsx","summary":"Registry de intents cuando se usa Film. Registrar las escenas específicas explícitamente."},
+    {"id":"DemoCamera","source":"packages/motion-remotion/src/DemoCamera.tsx","summary":"Cámara dirigida a partir de viewport e interacciones suministradas; no captura eventos por sí misma."},
+    {"id":"Caption","source":"packages/motion-remotion/src/Caption.tsx","summary":"Lower-third animado; revisar medidas antes de combinar con tutoriales."},
+    {"id":"WordSubtitles","source":"packages/motion-remotion/src/WordSubtitles.tsx","summary":"Subtítulos con palabra activa; necesitan timing y ajustes de zona segura."},
+    {"id":"PhoneMock","source":"packages/motion-remotion/src/PhoneMock.tsx","summary":"Marco móvil. No sustituye al layout de código de escritorio."},
+    {"id":"ClipVertical","source":"packages/motion-remotion/src/ClipVertical.tsx","summary":"Renderer de clips verticales single; es otro flujo, no necesario para convertir este tutorial a 9:16."},
+    {"id":"ClipPodcast","source":"packages/motion-remotion/src/ClipPodcast.tsx","summary":"Renderer de clips verticales duo; no equivale a un panel de código."}
+  ]
+}
