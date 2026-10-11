@@ -1,0 +1,371 @@
+{
+  "date": "2026-10-07T16:23:17.913Z",
+  "phase": "P-006 piloto HTTPS autorizado (customers-assets.theelena.me)",
+  "gate": "G-cap-live APROBADO por el operador (inventario: apps/customer-assets/ops/resource-inventory.md + deployment-checklist.md). Smoke sintético de namespace único.",
+  "environment": {
+    "mode": "live-pilot",
+    "origin": "https://customers-assets.theelena.me",
+    "worker": "customer-assets",
+    "d1": "customer-assets-prod (id 532a6841…, no secret)",
+    "r2": "customer-assets-prod (privado, aislado del backup Studio)",
+    "emailDelivery": "deferred-by-operator (link captured via wrangler tail, single-use)",
+    "budgets": {
+      "maxPhotoBytes": 1048576,
+      "maxTotalUploadBytes": 20971520,
+      "maxEmails": 2
+    }
+  },
+  "stages": [
+    {
+      "name": "00-preflight-auth",
+      "ok": true,
+      "assertions": 4,
+      "notes": [
+        "wrangler whoami ok (identidad NO registrada: la salida puede contener datos de cuenta)",
+        "entrega email DIFERIDA por el operador: login = copiar enlace (captura vía wrangler tail; 0 emails; sin secreto de proveedor)",
+        "magic link no provisto: 06-email-login lo captura en vivo vía wrangler tail (ruta SMOKE)"
+      ]
+    },
+    {
+      "name": "01-resource-check",
+      "ok": true,
+      "assertions": 10,
+      "notes": [
+        "D1 customer-assets-prod ya existe (reuso; ninguna otra base fue tocada)"
+      ]
+    },
+    {
+      "name": "02-migrate",
+      "ok": true,
+      "assertions": 20,
+      "notes": [
+        "workspace a58ec5f5-bac2-4dab-970d-e00483edf884; cliente piloto 1346819a-b3d6-441d-b1fb-920e814fa06a (ids no secret)",
+        "provisioning controlado por SQL idempotente: SOLO filas del piloto; sin DELETE, sin datos ajenos"
+      ]
+    },
+    {
+      "name": "03-deploy",
+      "ok": true,
+      "assertions": 6,
+      "notes": [
+        "versión desplegada: 6243e649-a827-4a53-ace7-97f69b042511 (id no secret)",
+        "entrega email diferida por el operador (sin secreto RESEND_API_KEY exigido; PORTAL_LIVE_SMOKE=1 captura el enlace por tail)"
+      ]
+    },
+    {
+      "name": "04-dns-https",
+      "ok": true,
+      "assertions": 5,
+      "notes": []
+    },
+    {
+      "name": "05-health",
+      "ok": true,
+      "assertions": 2,
+      "notes": []
+    },
+    {
+      "name": "06-email-login",
+      "ok": true,
+      "assertions": 7,
+      "notes": [
+        "login URL capturado vía wrangler tail (ruta SMOKE del mailer; 0 emails; valor no registrado)"
+      ]
+    },
+    {
+      "name": "07-upload",
+      "ok": true,
+      "assertions": 9,
+      "notes": []
+    },
+    {
+      "name": "08-cli-pull",
+      "ok": true,
+      "assertions": 15,
+      "notes": [
+        "workspace Studio con revisiones selladas EXISTENTES (sin render): d004"
+      ]
+    },
+    {
+      "name": "09-cli-push-existing-output",
+      "ok": true,
+      "assertions": 9,
+      "notes": [
+        "entrega ya COMPLETE de una corrida anterior (mismo fingerprint): convergencia idempotente verificada por estado y bytes, sin re-staging"
+      ]
+    },
+    {
+      "name": "10-publish-grid",
+      "ok": true,
+      "assertions": 12,
+      "notes": [
+        "post de una corrida anterior reusado (mismo asset; sin duplicados)"
+      ]
+    },
+    {
+      "name": "11-negatives-cross-client",
+      "ok": true,
+      "assertions": 8,
+      "notes": []
+    },
+    {
+      "name": "12-negatives-revocation",
+      "ok": true,
+      "assertions": 5,
+      "notes": []
+    },
+    {
+      "name": "13-evidence",
+      "ok": true,
+      "assertions": 10,
+      "notes": []
+    }
+  ],
+  "sha256": {
+    "materialPhotoUploaded": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5",
+    "materialPhotoRegistered": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5",
+    "materialPhotoReadBack": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5",
+    "materialPhotoImported": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5",
+    "outputFeedR1Manifest": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+    "outputFeedR1Delivered": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+    "outputFeedR1AfterR2": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+    "outputFeedR1Downloaded": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f"
+  },
+  "fixtures": {
+    "photo.jpg": {
+      "source": "embebido en scripts/customer-assets-verify-live.ts (JPEG 32x32 real)",
+      "bytes": 280,
+      "sha256": "780255fb9015c79e8016278861ceb00730e88c6f7a72cc18be473b9e1e3698a5"
+    },
+    "output feed r1": {
+      "source": "revisión sellada EXISTENTE del workspace demo (sin render/IA)",
+      "sha256": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f"
+    }
+  },
+  "commands": [
+    {
+      "cmd": "wrangler whoami",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 list --json",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 list --json",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler r2 bucket info customer-assets-prod",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler r2 bucket info customer-assets-prod",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 migrations list customer-assets-prod --remote",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 migrations list customer-assets-prod --remote",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command SELECT \"name\" FROM \"sqlite_master\" WHERE \"type\" = 'table' ORDER BY \"name\"",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command INSERT OR IGNORE INTO \"user\" (\"id\",\"name\",\"email\",\"email_verified\",\"role\",\"created_at\",\"updated_at\") VALUES ('052d9b6b-5810-415d-a71b-7b2779fb8e77','Portal Operator (P-006)','operator@theelena.me',1,'admin',CAST(strftime('%s','now') AS INTEGER),CAST(strftime('%s','now') AS INTEGER))",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command SELECT \"id\" FROM \"user\" WHERE \"email\" = 'operator@theelena.me'",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command INSERT OR IGNORE INTO \"user\" (\"id\",\"name\",\"email\",\"email_verified\",\"role\",\"created_at\",\"updated_at\") VALUES ('cd302b29-9215-48c5-9c0b-f6f02ee5d583','Portal Integrator (P-006)','integrator@theelena.me',1,'member',CAST(strftime('%s','now') AS INTEGER),CAST(strftime('%s','now') AS INTEGER))",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command SELECT \"id\" FROM \"user\" WHERE \"email\" = 'integrator@theelena.me'",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command SELECT \"id\" FROM \"portal_workspace\" WHERE \"label\" = 'P-006 Live Pilot Workspace' LIMIT 1",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command INSERT INTO \"portal_client\" (\"id\",\"workspace_id\",\"studio_client_id\",\"name\",\"projection_version\",\"created_ms\") VALUES ('0715653d-0fba-495e-9aa8-9f6015b566e0','a58ec5f5-bac2-4dab-970d-e00483edf884','bfc','BFC (adopción demo)',1,CAST(strftime('%s','now') AS INTEGER) * 1000) ON CONFLICT(\"workspace_id\",\"studio_client_id\") DO UPDATE SET \"name\" = excluded.\"name\"",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command SELECT \"id\" FROM \"portal_client\" WHERE \"workspace_id\" = 'a58ec5f5-bac2-4dab-970d-e00483edf884' AND \"studio_client_id\" = 'bfc'",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command SELECT \"id\" FROM \"user\" WHERE \"email\" = 'operator@theelena.me'",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command INSERT OR IGNORE INTO \"membership\" (\"id\",\"user_id\",\"portal_client_id\",\"status\",\"created_ms\") VALUES ('020a4940-6de0-49c4-9dcb-1562e3c90e52','afc4bc95-e396-491e-8a95-fb70ee78887d','1346819a-b3d6-441d-b1fb-920e814fa06a','active',CAST(strftime('%s','now') AS INTEGER) * 1000)",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler d1 execute customer-assets-prod --remote --json --command SELECT \"id\" FROM \"membership\" WHERE \"user_id\" = 'afc4bc95-e396-491e-8a95-fb70ee78887d' AND \"portal_client_id\" = '1346819a-b3d6-441d-b1fb-920e814fa06a' AND \"status\" = 'active'",
+      "exit": 0
+    },
+    {
+      "cmd": "bun run build",
+      "exit": 0
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets build",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler deploy",
+      "exit": 0
+    },
+    {
+      "cmd": "wrangler secret list --format json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-auth-status --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-client-adopt bfc --workspace /tmp/p006-live-dSiXq2/workspace --workspace-id a58ec5f5-bac2-4dab-970d-e00483edf884 --origin https://customers-assets.theelena.me --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-client-adopt second-brand --workspace /tmp/p006-live-dSiXq2/workspace --workspace-id a58ec5f5-bac2-4dab-970d-e00483edf884 --origin https://customers-assets.theelena.me --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-client-list --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client 1346819a-b3d6-441d-b1fb-920e814fa06a --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-show 7b4fca98-db89-4a8a-abc8-f955faf81c83 --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-pull 7b4fca98-db89-4a8a-abc8-f955faf81c83 --project demo-shared --asset bfc-cover --workspace /tmp/p006-live-dSiXq2/workspace --origin https://customers-assets.theelena.me --execute --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-pull 7b4fca98-db89-4a8a-abc8-f955faf81c83 --project demo-shared --asset bfc-cover --workspace /tmp/p006-live-dSiXq2/workspace --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p006-live-dSiXq2/workspace --client 1346819a-b3d6-441d-b1fb-920e814fa06a --project demo-shared --asset bfc-cover --revision d004 --outputs feed --origin https://customers-assets.theelena.me --execute --json",
+      "exit": 1,
+      "code": "HASH_MISMATCH",
+      "message": "Los bytes locales del output difieren del manifest sellado; restaurá la revisión explícitamente antes de entregar."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts asset-restore bfc-cover --project demo-shared --revision d004 --out /tmp/p006-restore-Lhsx1d --workspace /tmp/p006-live-dSiXq2/workspace --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p006-live-dSiXq2/workspace --client 1346819a-b3d6-441d-b1fb-920e814fa06a --project demo-shared --asset bfc-cover --revision d004 --outputs feed --origin https://customers-assets.theelena.me --execute --json",
+      "exit": 1,
+      "code": "CONFLICT",
+      "message": "[409] conflict: This delivery is already complete."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-delivery-push --workspace /tmp/p006-live-dSiXq2/workspace --client 1346819a-b3d6-441d-b1fb-920e814fa06a --project demo-shared --asset bfc-cover --revision d004 --outputs feed --origin https://customers-assets.theelena.me --execute --json",
+      "exit": 1,
+      "code": "CONFLICT",
+      "message": "[409] conflict: This delivery is already complete."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-auth-status --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client 1346819a-b3d6-441d-b1fb-920e814fa06a --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client 16daa584-e381-44f3-bd24-a3d543aa30db --origin https://customers-assets.theelena.me --json",
+      "exit": 2,
+      "code": "NOT_FOUND",
+      "message": "[404] not_found: Resource not found."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-client-adopt bfc --workspace /tmp/p006-live-dSiXq2/workspace --workspace-id a58ec5f5-bac2-4dab-970d-e00483edf884 --origin https://customers-assets.theelena.me --execute --json",
+      "exit": 1,
+      "code": "FORBIDDEN",
+      "message": "[403] forbidden: Adoption requires a workspace-wide grant."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client 16daa584-e381-44f3-bd24-a3d543aa30db --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-auth-status --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client 1346819a-b3d6-441d-b1fb-920e814fa06a --origin https://customers-assets.theelena.me --json",
+      "exit": 2,
+      "code": "NOT_FOUND",
+      "message": "[404] not_found: Resource not found."
+    },
+    {
+      "cmd": "bun packages/cli/src/main.ts portal-material-list --client 1346819a-b3d6-441d-b1fb-920e814fa06a --origin https://customers-assets.theelena.me --json",
+      "exit": 0
+    }
+  ],
+  "counts": {
+    "stages": 14,
+    "stagesOk": 14,
+    "assertions": 122,
+    "cliInvocations": 20,
+    "wranglerOps": 22,
+    "dataPlaneRequests": 18,
+    "bytesUploaded": 280,
+    "bytesDownloaded": 1280942,
+    "emailsSent": 0,
+    "portalClients": 2,
+    "deliveries": 1,
+    "posts": 1
+  },
+  "screenshots": [
+    {
+      "name": "mobile-materials-p006.png",
+      "path": "evidence/customer-assets-portal/p006-live/mobile-materials-p006.png",
+      "bytes": 101319
+    },
+    {
+      "name": "mobile-assets-p006.png",
+      "path": "evidence/customer-assets-portal/p006-live/mobile-assets-p006.png",
+      "bytes": 66760
+    },
+    {
+      "name": "mobile-grid-p006.png",
+      "path": "evidence/customer-assets-portal/p006-live/mobile-grid-p006.png",
+      "bytes": 63868
+    },
+    {
+      "name": "desktop-grid-p006.png",
+      "path": "evidence/customer-assets-portal/p006-live/desktop-grid-p006.png",
+      "bytes": 101446
+    }
+  ],
+  "notes": [
+    "Cadena de hashes verificada sobre HTTPS real: material subido==registrado==importado==releído; output manifest==entregado==descargado==tras-reintento.",
+    "La sesión del operador viajó SOLO como cookie en memoria del proceso y subprocess CLI env; no aparece en este archivo.",
+    "Las URLs de login (magic link) jamás se registran: capturadas del tail SMOKE y consumidas una sola vez; el consumidor de evidencia no puede reusarlas.",
+    "CERO emails salientes: entrega diferida por el operador (login = copiar enlace vía wrangler tail; var PORTAL_LIVE_SMOKE=1 solo para este deploy del piloto).",
+    "Sin render/IA/publicación social; sin borrado remoto: la revocación es un flip de estado y los bytes permanecen.",
+    "Presupuesto: 0/2 emails, 280B subidos (≤20MiB), foto de 280B (≤1MiB)."
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@videomaker/customer-assets",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "./src/contracts.ts",
+  "types": "./src/contracts.ts",
+  "exports": {
+    ".": "./src/contracts.ts",
+    "./client": "./src/client.ts"
+  }
+}

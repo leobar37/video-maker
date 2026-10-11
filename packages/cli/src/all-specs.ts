@@ -25,6 +25,7 @@ import { socialSpecs } from './specs/social';
 import { studioSpecs } from './specs/studio';
 import { studioDashboardSpecs } from './specs/studio-dashboard';
 import { studioSyncSpecs } from './specs/studio-sync';
+import { portalSpecs } from './specs/portal';
 import type { CommandSpec, PlanStep } from './spec-types';
 
 export const CLI_VERSION = '0.1.0';
@@ -47,5 +48,5 @@ const versionSpec: CommandSpec = {
 
 /** Every command of the CLI, in display order. */
 export function allSpecs(): CommandSpec[] {
-  return [...inspectSpecs, ...sceneSpecs, ...mediaSpecs, ...creatorSpecs, ...creatorBatchSpecs, ...ingestSpecs, ...socialSpecs, ...persistSpecs, ...clipAnalysisSpecs, ...clipIngestSpecs, ...clipCutSpecs, ...clipSelectionSpecs, ...clipDecisionSpecs, ...clipRenderSpecs, ...studioSpecs, ...studioSyncSpecs, ...studioDashboardSpecs, versionSpec];
+  return [...inspectSpecs, ...sceneSpecs, ...mediaSpecs, ...creatorSpecs, ...creatorBatchSpecs, ...ingestSpecs, ...socialSpecs, ...persistSpecs, ...clipAnalysisSpecs, ...clipIngestSpecs, ...clipCutSpecs, ...clipSelectionSpecs, ...clipDecisionSpecs, ...clipRenderSpecs, ...studioSpecs, ...studioSyncSpecs, ...studioDashboardSpecs, ...portalSpecs, versionSpec];
 }

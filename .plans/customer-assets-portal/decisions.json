@@ -1,5 +1,5 @@
 {
-  "scope": "planning-only; no execution authorized",
+  "scope": "orchestrator launch authorized; implementation, database and cloud gates remain unresolved",
   "defaults": {
     "runtime": "TanStack Start React on Cloudflare Workers",
     "database": "D1 through Drizzle; probe required",
@@ -29,7 +29,10 @@
       "remote GC",
       "mass migration"
     ],
-    "execution": "serial one mutable worker; shared changes need integration owner"
+    "execution": "serial one mutable worker; shared changes need integration owner",
+    "orchestratorModel": "zai/glm-5.3:high",
+    "workerModel": "zai/glm-5.3-flash:high",
+    "workerAssignment": "All phases P-001 through P-006; explicit model assignment per worker; no inherited default and no silent fallback"
   },
   "unresolved": [
     {
@@ -41,7 +44,7 @@
       "owner": "human operator before G-cap-live"
     },
     {
-      "decision": "exact OMP profile and spending/turn budget",
+      "decision": "spending/turn budget; model selection is resolved in defaults",
       "owner": "human operator at launcher preparation"
     },
     {

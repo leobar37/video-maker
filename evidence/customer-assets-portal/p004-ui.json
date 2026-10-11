@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-07T06:28:19.485Z",
+  "phase": "P-004 dashboard admin/cliente y simulación de Instagram + R-2 guest request",
+  "gate": "G-cap-local (emulated D1/R2, loopback-only ephemeral server, fake mail)",
+  "commands": [
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:ui",
+      "exit": 0
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:e2e",
+      "exit": 0
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets typecheck",
+      "exit": 0
+    }
+  ],
+  "counts": {
+    "files": 15,
+    "pass": 1,
+    "fail": 0,
+    "skip": 0
+  },
+  "screenshots": [
+    {
+      "name": "desktop-admin-access.png",
+      "path": "evidence/customer-assets-portal/p004-ui/desktop-admin-access.png",
+      "bytes": 158382
+    },
+    {
+      "name": "desktop-admin-assets.png",
+      "path": "evidence/customer-assets-portal/p004-ui/desktop-admin-assets.png",
+      "bytes": 156641
+    },
+    {
+      "name": "desktop-admin-grid.png",
+      "path": "evidence/customer-assets-portal/p004-ui/desktop-admin-grid.png",
+      "bytes": 92698
+    },
+    {
+      "name": "mobile-materials.png",
+      "path": "evidence/customer-assets-portal/p004-ui/mobile-materials.png",
+      "bytes": 101068
+    },
+    {
+      "name": "desktop-materials.png",
+      "path": "evidence/customer-assets-portal/p004-ui/desktop-materials.png",
+      "bytes": 97699
+    },
+    {
+      "name": "mobile-assets.png",
+      "path": "evidence/customer-assets-portal/p004-ui/mobile-assets.png",
+      "bytes": 94411
+    },
+    {
+      "name": "mobile-grid.png",
+      "path": "evidence/customer-assets-portal/p004-ui/mobile-grid.png",
+      "bytes": 57191
+    },
+    {
+      "name": "desktop-grid.png",
+      "path": "evidence/customer-assets-portal/p004-ui/desktop-grid.png",
+      "bytes": 79493
+    },
+    {
+      "name": "mobile-guest-request-open.png",
+      "path": "evidence/customer-assets-requests/r2-e2e/mobile-guest-request-open.png",
+      "bytes": 88624
+    },
+    {
+      "name": "mobile-guest-request-progress.png",
+      "path": "evidence/customer-assets-requests/r2-e2e/mobile-guest-request-progress.png",
+      "bytes": 96015
+    },
+    {
+      "name": "mobile-guest-request-fulfilled.png",
+      "path": "evidence/customer-assets-requests/r2-e2e/mobile-guest-request-fulfilled.png",
+      "bytes": 88318
+    },
+    {
+      "name": "mobile-guest-request-closed.png",
+      "path": "evidence/customer-assets-requests/r2-e2e/mobile-guest-request-closed.png",
+      "bytes": 73115
+    },
+    {
+      "name": "mobile-guest-asset-open.png",
+      "path": "evidence/customer-assets-requests/r2-e2e/mobile-guest-asset-open.png",
+      "bytes": 0
+    },
+    {
+      "name": "mobile-guest-asset-done.png",
+      "path": "evidence/customer-assets-requests/r2-e2e/mobile-guest-asset-done.png",
+      "bytes": 0
+    },
+    {
+      "name": "mobile-guest-asset-used.png",
+      "path": "evidence/customer-assets-requests/r2-e2e/mobile-guest-asset-used.png",
+      "bytes": 0
+    }
+  ],
+  "visualReview": {
+    "reviewedBy": "P004UiWorker (agent, image review)",
+    "verdict": "pass",
+    "checked": [
+      "login form surfaces a retryable error without a mail provider (no fake success)",
+      "grid is exactly 3 columns at 390px and 1440px with no horizontal overflow",
+      "member catalog/grid show only client_visible content; hidden revision never appeared",
+      "guest upload shows real byte progress and the remaining counter drops after each file",
+      "guest flow is mobile-usable at 390x844 with no login prompt anywhere and no cross-token cache",
+      "guest asset upload shows real progress and lands attributed to the exact asset (single-use link)",
+      "guest asset flow is mobile-usable at 390x844 with no login prompt anywhere and no cross-token cache"
+    ],
+    "notes": [
+      "Screenshots captured via page.screenshot (no browser chrome, no address bar): no tokens, cookies or credential-bearing URLs are visible.",
+      "Navigation used path-only URLs against 127.0.0.1; no Tailscale/localhost link shared.",
+      "R-2: the minted guest URL exists only inside the running scenario — never in this evidence file."
+    ]
+  },
+  "notes": [
+    "Grid: three columns at 390x844 and 1440x900, explicit order badges, MP4 covers use the no-poster placeholder.",
+    "Hide cascade proven end-to-end: catalog empty state + direct output URL 404 for the member after admin hide.",
+    "Isolation proven: client B deep link into client A shows the not-available empty state and 404s on direct output.",
+    "R-2 guest link: open → upload to the 2-file limit (auto-fulfilled) → admin close → closed state, all without login.",
+    "All scenarios passed."
+  ],
+  "durationMs": 37363
+}

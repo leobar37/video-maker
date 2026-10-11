@@ -1,7 +1,7 @@
 ---
 id: "P-003"
 title: "CLI conecta materiales y outputs con Studio sin duplicación"
-status: "pending"
+status: "accepted"
 phase_type: "integration"
 description: "Agentes trabajan en un workspace Studio local y el portal es remoto. El único puente permitido es la CLI/SDK, con workspace, cliente y revisión explícitos y un principal integrador autorizado."
 end_state: "CLI JSON y bridge pasan pruebas de dry-run sin red, importación verificable, entrega exacta/idempotente y compatibilidad; build exit 0."

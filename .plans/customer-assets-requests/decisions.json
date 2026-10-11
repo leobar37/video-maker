@@ -1,0 +1,44 @@
+{
+  "scope": "Plan registrado 2026-10-05 por aprobación del operador en sesión; ejecución offline de R-1..R-3 cubierta por las aprobaciones vigentes G-cap-implement/G-cap-local del 2026-10-04 (precedente G-001); live requiere G-cap-live nuevo y permanece OPEN",
+  "defaults": {
+    "runtime": "apps/customer-assets existente (TanStack Start/Workers, D1, R2 privado); cambios exclusivamente aditivos",
+    "projectPointer": "PortalProject Studio-canónico por cliente, unique (portalClientId, studioProjectId); D1 solo proyección",
+    "guestAccess": "token de capacidad por request, sin login ni sesión; cero visibilidad de catálogo/deliveries/otros requests/clientes",
+    "tokenStorage": "hash SHA-256 en D1, expiración 30m..30d (misma gramática que access-links), un token activo por request; re-mint revoca el anterior",
+    "requestLimits": "maxFiles y maxBytes configurables por request al crear (defaults UI: 10 archivos / 2 GiB, siempre validados contra la cuota del cliente)",
+    "quotaCap": "límites hard-capped por la cuota del cliente: doble reserva CAS (request + client_quota existente) en un batch D1 con release compensatorio; uploads libres sin proyecto/request intactos",
+    "expiry": "evaluación lazy en cada uso/listado; auto-close al llenar límites; sin cron ni colas",
+    "linkDelivery": "el operador entrega el URL por su canal; este plan no envía emails (0 emails)",
+    "operatorAccess": "preferencia permanente del operador (2026-10-05): TODO acceso del operador al portal se entrega como link autenticado (magic-link URL) minteado a operator@theelena.me; el login por email sigue diferido y no se le ofrece como vía al operador",
+    "cliImport": "portal-request-pull importa al proyecto Studio exacto del pointer vía bridge existente, SHA-256 verificado y procedencia (origin, materialId, requestId); idempotente",
+    "excluded": [
+      "email al invitado",
+      "aprobación editorial del cliente",
+      "publicación social",
+      "conversión HEIC/transcode",
+      "cron/colas",
+      "GC remoto",
+      "catálogo visible al invitado",
+      "migración destructiva"
+    ],
+    "execution": "serial, un mutable worker; coordinator integration owner de contracts/SDK/scripts compartidos",
+    "orchestratorModel": "zai/glm-5.3:high",
+    "workerModel": "zai/glm-5.3-flash:high",
+    "workerAssignment": "Fases R-1..R-3; asignación explícita de zai/glm-5.3-flash:high por worker; sin heredar default ni fallback silencioso"
+  },
+  "unresolved": [
+    {
+      "decision": "inventario y límites live: deploy del feature, migraciones 0003/0004 en prod, links reales, invitado real",
+      "owner": "humano operador antes de G-cap-live (ABIERTO)"
+    },
+    {
+      "decision": "proyecto Studio piloto y contacto invitado real",
+      "owner": "operador; fixtures sintéticos hasta asignación explícita"
+    },
+    {
+      "decision": "presupuesto de sesión y tope horario al lanzar OMP",
+      "owner": "operador en preparación del launcher"
+    }
+  ],
+  "automation": "Registro declarativo de decisiones del operador; no es schema match/action de supervisor. No auto-resolver gates desde este archivo."
+}

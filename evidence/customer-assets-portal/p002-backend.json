@@ -1,0 +1,76 @@
+{
+  "date": "2026-10-04",
+  "phase": "P-002",
+  "unit": "Backend privado de clientes, materiales y entregas (CAP:P-002)",
+  "environment": {
+    "runtime": "emulated Workers (Miniflare/workerd via @cloudflare/vitest-plugin 1.3.6, vitest 4.1.11)",
+    "bindings": "D1 + R2 emulated only; no real cloud, no deploy, no wrangler login, no real email/DNS (G-cap-live untouched)",
+    "bun": "1.4.2"
+  },
+  "pinnedVersions": "unchanged — no dependencies added or bumped (app package.json, root package.json, bun.lock untouched by P-002; the 'M' entries predate this unit)",
+  "commands": [
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:worker -- tests/access.test.ts tests/uploads.test.ts tests/deliveries.test.ts tests/posts.test.ts",
+      "exit": 0,
+      "detail": "4 files passed, 49 tests passed, 0 failed, 0 skipped"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets typecheck",
+      "exit": 0,
+      "detail": "tsc --noEmit -p tsconfig.json clean"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets build",
+      "exit": 0,
+      "detail": "vite build emits dist/client + dist/server; routeTree.gen.ts regenerated including /api/v1/$; zero node:fs/node:path in dist/server (grepped)"
+    },
+    {
+      "cmd": "bun run build",
+      "exit": 0,
+      "detail": "root tsc --noEmit -p tsconfig.build.json covers packages/customer-assets (contracts + client SDK)"
+    },
+    {
+      "cmd": "bun run --cwd apps/customer-assets test:worker",
+      "exit": 0,
+      "detail": "regression check: all 6 files incl. P-001 auth-runtime + upload-runtime, 73 tests passed"
+    }
+  ],
+  "counts": {
+    "files": 18,
+    "pass": 49,
+    "fail": 0,
+    "skip": 0
+  },
+  "fixtureSha256s": {
+    "tests/portal-fixture.ts": "266f75a349e245af465205d23fff2724af5ae0d51010449403f4aee8fdab1712",
+    "tests/access.test.ts": "4ea073a7efcbccc056fadff71a2e39a7df069a7885b5c31c70b29c906f498d51",
+    "tests/uploads.test.ts": "b80ffb00de6a987408f4ab65ba47d98c4138f074984330c4623bdd8f2ad71b13",
+    "tests/deliveries.test.ts": "3dbdb822547fc00c298eb546c4b576da1d9f4c8e5d7aaf2af25bcd75f08088f6",
+    "tests/posts.test.ts": "d7ddf429334aa4f1cabb9c33e792e7fbbf69814904b0c84f205c899adee7971c",
+    "migrations/0002_portal.sql": "29c899eb44d81d50689217b0fc98dd8e3668d210a1ff12c5b71dc686c476fad9",
+    "src/server/api.ts": "03607f7a38649427d8d01cb0abab5909f3ce87ea047b4e3d9858e30e3741e974",
+    "src/server/uploads.ts": "a989ee4f90016fa0a2ae2d8ddb87d929f0205dae56e21c3cb67b55080706c162",
+    "packages/customer-assets/src/contracts.ts": "43a0b050924cfff0b060a1bc6ef24d7811c2a7f639d9fec0edaa341c819b8c79",
+    "packages/customer-assets/src/client.ts": "1a3d06ad468c9ba57cd97e0845058889b170428530f04a7b03c7fd87ee340677",
+    "media/jpeg-portal-fixture (23B)": "56bdf9229a54ebef4deca8b1b023ac3d9740bbfd1df536c979f76fd534c90392",
+    "media/png-portal-fixture (26B)": "af20495175e71af388e4574f11b9dae34f3feb05b210b29f57ea0f581a01fd5f",
+    "media/mp4-portal-fixture (30B)": "c3c77f99699fb17071c618e29133a151d737695978d2b33f8ab08b771cea4c94"
+  },
+  "coverage": {
+    "tenantIsolation": "member B vs client A denied 404 on list/show/content/HEAD/Range/upload-init/upload-PUT/upload-complete/delivery-create/delivery-complete/output-GET/assets/posts-create/posts-list/grid — every path",
+    "internalDrafts": "member never sees internal assets/outputs; member DTOs carry no rootHash/objectKey/stagingKey; manipulated outputName/paths → 404; no arbitrary key access (server-resolved content-addressed keys only)",
+    "idempotency": "same key+payload replays existing resource (header idempotency-replayed), different payload 409, concurrent same-key inits collapse to ONE session/ONE reservation, delivery unique refs converge, adopt replay",
+    "quota": "1 GiB default; concurrent-safe CAS reservation; over-quota init 429 with exact ledger; concurrent over-quota rejected",
+    "integrity": "oversized 413 mid-stream commits nothing; lying declared type → 415 never ready; short/corrupt body → 400, session pending; staging deletion → 409; R2-then-D1 orphan recovered by content-address verification on retry; delivery complete requires every output verified",
+    "revocation": "membership revoke → next request 404; grant revoke → next request 404; key disable → 401; admin actions (posts/grid/visibility/adopt) unavailable via agent keys",
+    "headers": "content routes: private,no-store + nosniff + CSP default-src 'none' + server MIME + accept-ranges + inline disposition; 206 Range and 416 asterisk-form verified"
+  },
+  "notes": [
+    "No secrets, tokens, cookies or login URLs in this evidence.",
+    "workerd logs 'Can't read from request stream because client disconnected' lines during tests that intentionally abort oversized/short bodies mid-stream — expected emulation noise, not failures.",
+    "P-001 fixture quirk: setupFixture() collapses both member seeds into users.member (role ternary), leaving users.otherMember undefined. Worked around in tests/portal-fixture.ts by resolving provisioned users by email; NO P-001 file was edited.",
+    "bun 1.4.2 workspace symlink quirk: apps/customer-assets/node_modules/@videomaker/customer-assets recreated manually as ../../../../packages/customer-assets (4 levels, not the 2 levels recorded in P-001 context notes).",
+    "apps/customer-assets/src/routeTree.gen.ts regenerated by vite build to register the new /api/v1/$ catch-all route.",
+    "Design decisions within P-002 ownership: single /api/v1/$ catch-all route delegating to src/server/api.ts dispatcher (src/server/api.ts added beyond the named service files — it is the routes/api implementation surface); idempotency ledger table (contracts §6 binding applies to all mutating ops); delivery uniqueness is per-client refs so one Studio revision can be delivered to different portal clients of a multi-client project; SDK client uses redirect:'error' so credentials can never follow a redirect (stronger than strip-on-external, documented in client.ts)."
+  ]
+}

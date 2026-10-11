@@ -4,19 +4,57 @@
   "visual": {
     "status": "PASS",
     "reviewer": "zai/glm-5.3-flash:high",
-    "desktopViewport": [1440, 1000],
-    "mobileViewport": [390, 844],
+    "desktopViewport": [
+      1440,
+      1000
+    ],
+    "mobileViewport": [
+      390,
+      844
+    ],
     "noPageOverflow": true,
     "fourRealPngPreviewsDecoded": true,
-    "filters": ["client:bfc (3, includes preset ownership)", "project:clientless (2)", "asset:bfc-cover (2)", "kind:video (2)", "kind:svg-empty (0)"],
+    "filters": [
+      "client:bfc (3, includes preset ownership)",
+      "project:clientless (2)",
+      "asset:bfc-cover (2)",
+      "kind:video (2)",
+      "kind:svg-empty (0)"
+    ],
     "feedStoryButtonsVerified": true,
     "revisionDiffVerified": true,
-    "video": {"played": true, "nativeControls": true, "duration": 15.741, "width": 1080, "height": 1920},
-    "download": {"name": "feed.png", "bytes": 640331, "sha256": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f", "savedFileMatchesSealedEndpoint": true},
+    "video": {
+      "played": true,
+      "nativeControls": true,
+      "duration": 15.741,
+      "width": 1080,
+      "height": 1920
+    },
+    "download": {
+      "name": "feed.png",
+      "bytes": 640331,
+      "sha256": "556dd80da39eacdfeb950fc9dcc87c064efaa6fa42fe68067144b4293998cd8f",
+      "savedFileMatchesSealedEndpoint": true
+    },
     "screenshots": [
-      {"path": "evidence/creative-workspace/screenshots/desktop-final.png", "sha256": "5855df55a8437d9b6489b4f86a97b718a99f74e3d372b7388ac642dfb47cae17", "width": 1425, "height": 2263},
-      {"path": "evidence/creative-workspace/screenshots/desktop-video-diff.png", "sha256": "abefb06d3d44eae8255ca08a947fd5fcb3cf6311f5a51c5443dd572a1bc8a933", "width": 1425, "height": 2707},
-      {"path": "evidence/creative-workspace/screenshots/mobile-final.png", "sha256": "63efa8c86537eef3504bd065ec73302a1185434cace83b8348d654d23d1bfd23", "width": 390, "height": 4634}
+      {
+        "path": "evidence/creative-workspace/screenshots/desktop-final.png",
+        "sha256": "5855df55a8437d9b6489b4f86a97b718a99f74e3d372b7388ac642dfb47cae17",
+        "width": 1425,
+        "height": 2263
+      },
+      {
+        "path": "evidence/creative-workspace/screenshots/desktop-video-diff.png",
+        "sha256": "abefb06d3d44eae8255ca08a947fd5fcb3cf6311f5a51c5443dd572a1bc8a933",
+        "width": 1425,
+        "height": 2707
+      },
+      {
+        "path": "evidence/creative-workspace/screenshots/mobile-final.png",
+        "sha256": "63efa8c86537eef3504bd065ec73302a1185434cace83b8348d654d23d1bfd23",
+        "width": 390,
+        "height": 4634
+      }
     ]
   },
   "coordinator": {
@@ -25,19 +63,22 @@
     "originalFilesChecked": 55,
     "allOriginalSha256Unchanged": true,
     "privateRetryBucket": "video-maker-archive-prd",
-    "mediaIncidentEvidence": ["validation-media-incident.json", "live-inventory-media-incident.json"],
+    "mediaIncidentEvidence": [
+      "validation-media-incident.json",
+      "live-inventory-media-incident.json"
+    ],
     "configurationWarning": "Existing R2_BUNDLES_BUCKET_NAME resolves media; private verifier pins archive at runtime. For CLI sync explicitly set R2_BUNDLES_BUCKET_NAME=video-maker-archive-prd; no .env/credentials were edited."
   },
   "offline": {
-    "ranAt": "2026-10-01T04:29:34.561Z",
+    "ranAt": "2026-10-07T16:16:57.609Z",
     "exitCode": 0,
     "command": "bun run studio:verify",
     "fixtureBytes": 9745720,
     "suites": {
       "required": 17,
       "filesRan": 17,
-      "totalTests": 269,
-      "passed": 269,
+      "totalTests": 275,
+      "passed": 275,
       "failed": 0,
       "exitCode": 0
     },
@@ -90,19 +131,19 @@
       ],
       "cliExitCodes": [
         {
-          "args": "project list --workspace /tmp/cw-verify-1XW07B/workspace --json",
+          "args": "project list --workspace /tmp/cw-verify-0hVmxU/workspace --json",
           "exitCode": 0
         },
         {
-          "args": "asset inspect bfc-cover --project shared-showcase --workspace /tmp/cw-verify-1XW07B/workspace --json",
+          "args": "asset inspect bfc-cover --project shared-showcase --workspace /tmp/cw-verify-0hVmxU/workspace --json",
           "exitCode": 0
         },
         {
-          "args": "asset history hello-video --project solo-workshop --workspace /tmp/cw-verify-1XW07B/workspace --json",
+          "args": "asset history hello-video --project solo-workshop --workspace /tmp/cw-verify-0hVmxU/workspace --json",
           "exitCode": 0
         },
         {
-          "args": "preset list --workspace /tmp/cw-verify-1XW07B/workspace --json",
+          "args": "preset list --workspace /tmp/cw-verify-0hVmxU/workspace --json",
           "exitCode": 0
         }
       ]
@@ -116,9 +157,9 @@
       "videoContentType": "video/mp4",
       "videoServed": true,
       "cspPresent": true,
-      "port": 42977,
+      "port": 40409,
       "stopped": true,
-      "url": "http://127.0.0.1:42977 (efímero, detenido)"
+      "url": "http://127.0.0.1:40409 (efímero, detenido)"
     },
     "failures": [],
     "notes": []

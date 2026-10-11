@@ -1,0 +1,44 @@
+{
+  "operations": [
+    {
+      "op": "initiative.create",
+      "input": {
+        "name": "customer-assets-requests",
+        "desc": "Plan .plans/customer-assets-requests; upload requests con enlace de invitado sobre el portal v1 (R-001). Gates reutilizados de customer-assets-portal (IDs globales climier): G-cap-implement/G-cap-local resueltos por el operador 2026-10-04 (cubre trabajo offline R-1..R-3, mismo app y scripts, sin infra nueva); G-cap-live sigue open y bloquea ejecución live de este feature (deploy/migraciones prod/links reales/invitado real)."
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-REQ-001",
+        "initiative": "customer-assets-requests",
+        "title": "R-1 · Proyección PortalProject, pestaña admin y material con proyecto",
+        "body": "Leer .plans/customer-assets-requests/phases/R-1.md y ejecutar solo esta unidad; contracts.md (aditivo) y decisions.json normativos. Portal v1 intacto: uploads libres, auth, access links, entregas, posts/grid sin regresión; Studio canónico, D1 solo proyección; aditivo only. Gates offline cubiertos por aprobación vigente 2026-10-04; G-cap-live ABIERTO: nada live. Un mutable writer (zai/glm-5.3-flash:high), coordinator dueño integración; no findings ajenos.",
+        "acceptance": "Proyectos y material-atribuido pasan tests de unicidad/autorización/atribución y de uploads libres intactos; typecheck/build exit 0. Verification: bun --cwd apps/customer-assets run test:worker -- tests/projects.test.ts tests/material-project.test.ts && bun --cwd apps/customer-assets run typecheck && bun --cwd apps/customer-assets run build; todos exit 0",
+        "blocked_by": "G-cap-implement,G-cap-local"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-REQ-002",
+        "initiative": "customer-assets-requests",
+        "title": "R-2 · Upload requests con enlace de invitado, móvil y cuotas",
+        "body": "Leer .plans/customer-assets-requests/phases/R-2.md y ejecutar solo esta unidad; contracts.md (aditivo) y decisions.json normativos. Token de capacidad SOLO para su request, sin login/sesión/catálogo; reserva doble CAS request+cuota; auto-close fill/expiry lazy; 0 emails: el URL lo entrega el operador. Gates offline cubiertos por aprobación vigente 2026-10-04; G-cap-live ABIERTO: nada live. Un mutable writer (zai/glm-5.3-flash:high), coordinator dueño integración; no findings ajenos.",
+        "acceptance": "Tokens de capacidad, límites/cuota concurrentes y auto-close pasan tests de aislamiento/concurrencia/expiración y e2e móvil del enlace; typecheck/build exit 0. Verification: bun --cwd apps/customer-assets run test:worker -- tests/request-tokens.test.ts tests/request-quota.test.ts && bun --cwd apps/customer-assets run test:ui && bun --cwd apps/customer-assets run test:e2e && bun --cwd apps/customer-assets run typecheck && bun --cwd apps/customer-assets run build; todos exit 0",
+        "blocked_by": "T-REQ-001"
+      }
+    },
+    {
+      "op": "task.create",
+      "input": {
+        "id": "T-REQ-003",
+        "initiative": "customer-assets-requests",
+        "title": "R-3 · CLI portal-request-pull, cierre/expiración y auditoría",
+        "body": "Leer .plans/customer-assets-requests/phases/R-3.md y ejecutar solo esta unidad; contracts.md (aditivo) y decisions.json normativos. Specs portal-request-* con plan/--execute e import al proyecto Studio exacto del pointer por el bridge (SHA + procedencia, idempotente); cierre/expiración y auditoría sin token/URL en logs; portal:verify extendido con recorrido y negativas. Gates offline cubiertos por aprobación vigente 2026-10-04; G-cap-live ABIERTO: create --execute solo contra servidor de test. Un mutable writer (zai/glm-5.3-flash:high), coordinator dueño integración; no findings ajenos.",
+        "acceptance": "CLI JSON y pull al proyecto exacto pasan pruebas de dry-run sin red, import verificable/idempotente, cierre/expiración y auditoría; portal:verify extendido con el recorrido request completo y negativas; build exit 0. Verification: bun test packages/customer-assets packages/cli/src/specs/portal.test.ts packages/cli/src/specs/studio.test.ts packages/cli/src/portal packages/cli/src/runtime.test.ts && bun run portal:verify && bun run build; todos exit 0",
+        "blocked_by": "T-REQ-002,G-cap-live"
+      }
+    }
+  ]
+}
